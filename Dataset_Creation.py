@@ -217,7 +217,7 @@ def train_cnn(
 def plot_confusion_matrix(y_true, y_pred, classes,
                           normalize=False,
                           title='',
-                          cmap=plt.cm.Blues):
+                          cmap=plt.cm.Blues, name = 'generic'):
     """
     This function prints and plots the confusion matrix.
     Normalization can be applied by setting `normalize=True`.
@@ -249,7 +249,8 @@ def plot_confusion_matrix(y_true, y_pred, classes,
                     ha="center", va="center",
                     color="white" if cm[i, j] > thresh else "black", fontsize=12)
     fig.tight_layout()
-    plt.show()
+    plt.savefig('confusion_matrices/' + name + '.png', bbox_inches='tight')
+    #plt.show()
     plt.close()
 
     return 
@@ -259,42 +260,31 @@ def plot_confusion_matrix(y_true, y_pred, classes,
 # load your images into an array called `images` with shape
 #  (num_objects, num_bands, height, width)
 path = '/Users/jimenagonzalez/research/DSPL/Simulations-Double-Source-Gravitational-Lensing/Data/Sim_complete/'
-hdu_list = fits.open(path + 'complete.fits')
-sim = hdu_list[1].data[0:600]
+
+hdu_list = fits.open(path + 'single(22-26.2).fits')
+idx = list(dict.fromkeys(np.random.randint(len(hdu_list[1].data), size=13000)))
+sim = hdu_list[1].data[idx,:]
 hdu_list.close()
-hdu_list = fits.open(path + 'cutouts.fits')
-cutouts = hdu_list[1].data[-600:]
+
+hdu_list = fits.open(path + 'negative_cases.fits')
+idx = list(dict.fromkeys(np.random.randint(len(hdu_list[1].data), size=13000)))
+cutouts = hdu_list[1].data[idx,:]
 hdu_list.close()
+
 print('sim shape ' + str(sim.shape))
-print('cutouts shape ' + str(sim.shape))
+print('cutouts shape ' + str(cutouts.shape))
 images = np.concatenate((sim, cutouts)).astype(np.float32)
-
-
-hdu_list = fits.open(path + 'complete_notgood.fits')
-sim_notgood = hdu_list[1].data[600:660]
-hdu_list.close()
-print('not so good shape ' + str(sim_notgood.shape))
-images_notgood = sim_notgood.astype(np.float32)
-
 
 # load your labels int0 an array called `labels` with shape
 #  (num_objects,)
 l1, l2 = np.zeros(len(sim), dtype = np.int64), np.ones(len(cutouts), dtype = np.int64)
 labels = np.concatenate((l1, l2))
-
-l_notgood = np.zeros(len(sim_notgood), dtype = np.int64)
+len_dataset = len(labels)
 
 # Make train and test datasets
 train_dataset, test_dataset = make_train_test_datasets(images, labels)
 print('len train_dataset, len test_dataset')
 print(len(train_dataset), len(test_dataset))
-print(test_dataset)
-
-train_dataset_notgood, test_dataset_notgood = make_train_test_datasets(images_notgood, l_notgood)
-print('len train_dataset not_good, len test_dataset not_good')
-print(len(train_dataset_notgood), len(test_dataset_notgood))
-#test_dataset = torch.cat((test_dataset, train_dataset_notgood), 0)
-
 
 # Make a DataLoader to train the network
 train_dataloader = DataLoader(train_dataset, batch_size=20, shuffle=True, num_workers=4)
@@ -319,4 +309,4 @@ test_labels = test_dataset[:]['label'].data.numpy()
 
 # Plot a confusion matrix of your results
 classes = np.unique(labels)
-plot_confusion_matrix(test_labels, test_predictions, classes)
+plot_confusion_matrix(test_labels, test_predictions, classes, name = 'single' + str(len_dataset) + 'e')
