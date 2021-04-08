@@ -8,6 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 
+#import ipython_bell
 import sys
 from astropy.io import fits
 
@@ -261,13 +262,14 @@ def plot_confusion_matrix(y_true, y_pred, classes,
 #  (num_objects, num_bands, height, width)
 path = '/Users/jimenagonzalez/research/DSPL/Simulations-Double-Source-Gravitational-Lensing/Data/Sim_complete/'
 
-hdu_list = fits.open(path + 'single(22-26.2).fits')
-idx = list(dict.fromkeys(np.random.randint(len(hdu_list[1].data), size=13000)))
+#hdu_list = fits.open(path + 'double(22-(23.6,24.6),(m1,26.2)).fits')
+hdu_list = fits.open(path + 'single_0.9E,25.5mag,0.4E.fits')
+idx = list(dict.fromkeys(np.random.randint(len(hdu_list[1].data), size=6000)))
 sim = hdu_list[1].data[idx,:]
 hdu_list.close()
 
 hdu_list = fits.open(path + 'negative_cases.fits')
-idx = list(dict.fromkeys(np.random.randint(len(hdu_list[1].data), size=13000)))
+idx = list(dict.fromkeys(np.random.randint(len(hdu_list[1].data), size=6000)))
 cutouts = hdu_list[1].data[idx,:]
 hdu_list.close()
 
@@ -304,9 +306,9 @@ cnn = train_cnn(cnn,
 
 # Use the CNN to classify your whole test dataset
 cnn.eval()
-test_predictions = torch.max(cnn(test_dataset[:]['image']), 1)[1].data.numpy()
+test_predictions = torch.max(cnn(test_dataset[:]['image']), 1)[1].data.numpy()  
 test_labels = test_dataset[:]['label'].data.numpy()
 
 # Plot a confusion matrix of your results
 classes = np.unique(labels)
-plot_confusion_matrix(test_labels, test_predictions, classes, name = 'single' + str(len_dataset) + 'e')
+plot_confusion_matrix(test_labels, test_predictions, classes, name = 's0.9E,25.5,0.4 ' + str(len_dataset) + 'e')
