@@ -263,13 +263,13 @@ def plot_confusion_matrix(y_true, y_pred, classes,
 path = '/Users/jimenagonzalez/research/DSPL/Simulations-Double-Source-Gravitational-Lensing/Data/Sim_complete/'
 
 #hdu_list = fits.open(path + 'double(22-(23.6,24.6),(m1,26.2)).fits')
-hdu_list = fits.open(path + 'single_0.9E,25.5mag,0.4E.fits')
-idx = list(dict.fromkeys(np.random.randint(len(hdu_list[1].data), size=6000)))
+hdu_list = fits.open(path + 'Positive_exp12.fits')
+idx = list(dict.fromkeys(np.random.randint(len(hdu_list[1].data), size=1100)))
 sim = hdu_list[1].data[idx,:]
 hdu_list.close()
 
-hdu_list = fits.open(path + 'negative_cases.fits')
-idx = list(dict.fromkeys(np.random.randint(len(hdu_list[1].data), size=6000)))
+hdu_list = fits.open(path + 'DES_lenses.fits')
+idx = list(dict.fromkeys(np.random.randint(len(hdu_list[1].data), size=1000)))
 cutouts = hdu_list[1].data[idx,:]
 hdu_list.close()
 
@@ -311,4 +311,4 @@ test_labels = test_dataset[:]['label'].data.numpy()
 
 # Plot a confusion matrix of your results
 classes = np.unique(labels)
-plot_confusion_matrix(test_labels, test_predictions, classes, name = 's0.9E,25.5,0.4 ' + str(len_dataset) + 'e')
+plot_confusion_matrix(test_labels, test_predictions, classes, name = 'R3_exp12_' + str(len_dataset))
