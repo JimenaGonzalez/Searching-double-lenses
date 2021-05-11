@@ -9,6 +9,7 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 
 #import ipython_bell
+import random
 import sys
 from astropy.io import fits
 
@@ -96,7 +97,7 @@ class CNN(nn.Module):
                                kernel_size=15, 
                                stride=3,
                                padding=2)
-        
+
         self.conv2 = nn.Conv2d(in_channels=48, 
                                out_channels=96,
                                kernel_size=5, 
@@ -109,13 +110,14 @@ class CNN(nn.Module):
         
         self.fc1 = nn.Linear(in_features=3456, 
                              out_features=408)
-        
+
         self.fc2 = nn.Linear(in_features=408, 
                              out_features=25)
-        
+
         self.fc3 = nn.Linear(in_features=25, 
                              out_features=num_classes)
-        
+
+
     def forward(self, x):
         #Network Flow
         x = self.conv1(x)
@@ -133,6 +135,11 @@ class CNN(nn.Module):
         output = F.log_softmax(x, dim=1)
         return output
 
+    def init_weights(self, m):
+        if (type(m) == nn.Linear or type(m) == nn.Conv2d):
+            torch.nn.init.xavier_uniform_(m.weight)
+            m.bias.data.fill_(0.01)
+
 def train_cnn(
     cnn, 
     train_dataloader, 
@@ -141,7 +148,7 @@ def train_cnn(
     validation_size=None, 
     monitor=False,
     number_of_training_epochs=10,
-    learning_rate=0.001):
+    learning_rate=0.0001):
 	
     """
     Train a CNN and output performance if desired
@@ -256,25 +263,45 @@ def plot_confusion_matrix(y_true, y_pred, classes,
 
     return 
 
+
+def plot_performance(cnn, name):
+    x = np.linspace(1,len(cnn.losses),len(cnn.losses))
+    if(name == 'losses'): 
+    	data = cnn.losses
+    	title = 'Loss'
+    if(name == 'train_acc'): 
+    	data = cnn.train_acc
+    	title = 'Training Accuracy'
+    if(name == 'validation_acc'): 
+    	data = cnn.validation_acc
+    	title = 'Validation Accuracy'
+    fig, ax1 = plt.subplots(figsize=(4, 3), ncols=1)
+    ax1.set_title(title)
+    ax1.set_xlabel('Epoch')
+    ax1.set_ylabel(title)
+    ax1.plot(x, data, 'o')
+    plt.savefig(title + '.png', bbox_inches='tight')
+
+
 #### MAIN BODY CODE
+torch.manual_seed(0)
+random.seed(0)
+np.random.seed(0)
 
 # load your images into an array called `images` with shape
 #  (num_objects, num_bands, height, width)
 path = '/Users/jimenagonzalez/research/DSPL/Simulations-Double-Source-Gravitational-Lensing/Data/Sim_complete/'
 
-#hdu_list = fits.open(path + 'double(22-(23.6,24.6),(m1,26.2)).fits')
-hdu_list = fits.open(path + 'Positive_exp12.fits')
-idx = list(dict.fromkeys(np.random.randint(len(hdu_list[1].data), size=1100)))
-sim = hdu_list[1].data[idx,:]
+hdu_list = fits.open(path + '/old/double.fits')
+#idx = list(dict.fromkeys(np.random.randint(len(hdu_list[1].data), size=1100)))
+sim = hdu_list[1].data[:1000]#[idx,:]
 hdu_list.close()
 
 hdu_list = fits.open(path + 'DES_lenses.fits')
-idx = list(dict.fromkeys(np.random.randint(len(hdu_list[1].data), size=1000)))
-cutouts = hdu_list[1].data[idx,:]
+#idx = list(dict.fromkeys(np.random.randint(len(hdu_list[1].data), size=1000)))
+cutouts = hdu_list[1].data[:1000]#[idx,:]
 hdu_list.close()
 
-print('sim shape ' + str(sim.shape))
-print('cutouts shape ' + str(cutouts.shape))
 images = np.concatenate((sim, cutouts)).astype(np.float32)
 
 # load your labels int0 an array called `labels` with shape
@@ -285,8 +312,6 @@ len_dataset = len(labels)
 
 # Make train and test datasets
 train_dataset, test_dataset = make_train_test_datasets(images, labels)
-print('len train_dataset, len test_dataset')
-print(len(train_dataset), len(test_dataset))
 
 # Make a DataLoader to train the network
 train_dataloader = DataLoader(train_dataset, batch_size=20, shuffle=True, num_workers=4)
@@ -296,13 +321,22 @@ cnn = CNN(
 	in_channels=np.shape(images)[1], 
 	num_classes=len(np.unique(labels)))
 
+#Initialize weights
+cnn.apply(cnn.init_weights)
+
 # Train the CNN
 cnn = train_cnn(cnn, 
 				train_dataloader, 
 				train_dataset=train_dataset,
 				test_dataset=test_dataset,
-				validation_size=100,
+				validation_size=200, #100
+				number_of_training_epochs=150,
 				monitor=True)
+
+#plot learning rate
+plot_performance(cnn, 'losses')
+plot_performance(cnn, 'train_acc')
+plot_performance(cnn, 'validation_acc')
 
 # Use the CNN to classify your whole test dataset
 cnn.eval()
@@ -311,4 +345,4 @@ test_labels = test_dataset[:]['label'].data.numpy()
 
 # Plot a confusion matrix of your results
 classes = np.unique(labels)
-plot_confusion_matrix(test_labels, test_predictions, classes, name = 'R3_exp12_' + str(len_dataset))
+plot_confusion_matrix(test_labels, test_predictions, classes, name = 'Double_' + str(len_dataset))
