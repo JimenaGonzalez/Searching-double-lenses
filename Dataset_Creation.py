@@ -257,7 +257,7 @@ def plot_confusion_matrix(y_true, y_pred, classes,
                     ha="center", va="center",
                     color="white" if cm[i, j] > thresh else "black", fontsize=12)
     fig.tight_layout()
-    plt.savefig('confusion_matrices/' + name + '.png', bbox_inches='tight')
+    plt.savefig(name + '.png', bbox_inches='tight')
     #plt.show()
     plt.close()
 
@@ -280,7 +280,7 @@ def plot_performance(cnn, name):
     ax1.set_xlabel('Epoch')
     ax1.set_ylabel(title)
     ax1.plot(x, data, 'o')
-    plt.savefig(title + '.png', bbox_inches='tight')
+    plt.savefig('Bad_' + title + '.png', bbox_inches='tight')
 
 
 #### MAIN BODY CODE
@@ -292,14 +292,15 @@ np.random.seed(0)
 #  (num_objects, num_bands, height, width)
 path = '/Users/jimenagonzalez/research/DSPL/Simulations-Double-Source-Gravitational-Lensing/Data/Sim_complete/'
 
-hdu_list = fits.open(path + '/old/double.fits')
-#idx = list(dict.fromkeys(np.random.randint(len(hdu_list[1].data), size=1100)))
-sim = hdu_list[1].data[:1000]#[idx,:]
+hdu_list = fits.open(path + 'negative_cases.fits')
+idx = random.sample(range(len(hdu_list[1].data)), 1000)
+sim = hdu_list[1].data[idx,:] #[:1000]
 hdu_list.close()
 
-hdu_list = fits.open(path + 'DES_lenses.fits')
-#idx = list(dict.fromkeys(np.random.randint(len(hdu_list[1].data), size=1000)))
-cutouts = hdu_list[1].data[:1000]#[idx,:]
+
+hdu_list = fits.open(path + 'negative_cases.fits')
+idx = random.sample(range(len(hdu_list[1].data)), 1000)
+cutouts = hdu_list[1].data[idx,:] #[:1000]
 hdu_list.close()
 
 images = np.concatenate((sim, cutouts)).astype(np.float32)
@@ -330,7 +331,7 @@ cnn = train_cnn(cnn,
 				train_dataset=train_dataset,
 				test_dataset=test_dataset,
 				validation_size=200, #100
-				number_of_training_epochs=150,
+				number_of_training_epochs=100, #150
 				monitor=True)
 
 #plot learning rate
@@ -345,4 +346,4 @@ test_labels = test_dataset[:]['label'].data.numpy()
 
 # Plot a confusion matrix of your results
 classes = np.unique(labels)
-plot_confusion_matrix(test_labels, test_predictions, classes, name = 'Double_' + str(len_dataset))
+plot_confusion_matrix(test_labels, test_predictions, classes, name = 'Bad_' + str(len_dataset))
