@@ -280,7 +280,7 @@ def plot_performance(cnn, name):
     ax1.set_xlabel('Epoch')
     ax1.set_ylabel(title)
     ax1.plot(x, data, 'o')
-    plt.savefig('Bad_' + title + '.png', bbox_inches='tight')
+    plt.savefig('DS_' + title + '.png', bbox_inches='tight')
 
 
 #### MAIN BODY CODE
@@ -292,13 +292,13 @@ np.random.seed(0)
 #  (num_objects, num_bands, height, width)
 path = '/Users/jimenagonzalez/research/DSPL/Simulations-Double-Source-Gravitational-Lensing/Data/Sim_complete/'
 
-hdu_list = fits.open(path + 'negative_cases.fits')
+hdu_list = fits.open(path + 'Double.fits')
 idx = random.sample(range(len(hdu_list[1].data)), 1000)
 sim = hdu_list[1].data[idx,:] #[:1000]
 hdu_list.close()
 
 
-hdu_list = fits.open(path + 'negative_cases.fits')
+hdu_list = fits.open(path + 'Single.fits')
 idx = random.sample(range(len(hdu_list[1].data)), 1000)
 cutouts = hdu_list[1].data[idx,:] #[:1000]
 hdu_list.close()
@@ -331,7 +331,7 @@ cnn = train_cnn(cnn,
 				train_dataset=train_dataset,
 				test_dataset=test_dataset,
 				validation_size=200, #100
-				number_of_training_epochs=100, #150
+				number_of_training_epochs=200, #150
 				monitor=True)
 
 #plot learning rate
@@ -346,4 +346,4 @@ test_labels = test_dataset[:]['label'].data.numpy()
 
 # Plot a confusion matrix of your results
 classes = np.unique(labels)
-plot_confusion_matrix(test_labels, test_predictions, classes, name = 'Bad_' + str(len_dataset))
+plot_confusion_matrix(test_labels, test_predictions, classes, name = 'DS_' + str(len_dataset))
