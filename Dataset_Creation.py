@@ -266,21 +266,16 @@ def plot_confusion_matrix(y_true, y_pred, classes,
 
 def plot_performance(cnn, name):
     x = np.linspace(1,len(cnn.losses),len(cnn.losses))
-    if(name == 'losses'): 
-    	data = cnn.losses
-    	title = 'Loss'
-    if(name == 'train_acc'): 
-    	data = cnn.train_acc
-    	title = 'Training Accuracy'
-    if(name == 'validation_acc'): 
-    	data = cnn.validation_acc
-    	title = 'Validation Accuracy'
-    fig, ax1 = plt.subplots(figsize=(4, 3), ncols=1)
-    ax1.set_title(title)
+    fig, ax1 = plt.subplots(figsize=(12, 7), ncols=1)
+    ax1.set_title('Performance')
     ax1.set_xlabel('Epoch')
-    ax1.set_ylabel(title)
-    ax1.plot(x, data, 'o')
-    plt.savefig('DS_' + title + '.png', bbox_inches='tight')
+    ax1.plot(x, cnn.losses, 'ko', label = 'Loss')
+    ax1.plot(x, cnn.train_acc, 'ro', label = 'Training Accuracy')
+    ax1.plot(x, cnn.validation_acc, 'go', label = 'Validation Accuracy')
+    ax1.legend()
+    plt.xlim([1.5, len(cnn.losses) + 0.5])
+    plt.ylim([0, 2])
+    plt.savefig('Performance_' + name +'.png', bbox_inches='tight')
 
 
 #### MAIN BODY CODE
@@ -298,7 +293,7 @@ sim = hdu_list[1].data[idx,:] #[:1000]
 hdu_list.close()
 
 
-hdu_list = fits.open(path + 'Single.fits')
+hdu_list = fits.open(path + 'negative_cases.fits')
 idx = random.sample(range(len(hdu_list[1].data)), 1000)
 cutouts = hdu_list[1].data[idx,:] #[:1000]
 hdu_list.close()
@@ -331,13 +326,12 @@ cnn = train_cnn(cnn,
 				train_dataset=train_dataset,
 				test_dataset=test_dataset,
 				validation_size=200, #100
-				number_of_training_epochs=200, #150
+				number_of_training_epochs=150, #150
 				monitor=True)
 
 #plot learning rate
-plot_performance(cnn, 'losses')
-plot_performance(cnn, 'train_acc')
-plot_performance(cnn, 'validation_acc')
+name_p = 'double_0'
+plot_performance(cnn, name_p)
 
 # Use the CNN to classify your whole test dataset
 cnn.eval()
@@ -346,4 +340,4 @@ test_labels = test_dataset[:]['label'].data.numpy()
 
 # Plot a confusion matrix of your results
 classes = np.unique(labels)
-plot_confusion_matrix(test_labels, test_predictions, classes, name = 'DS_' + str(len_dataset))
+plot_confusion_matrix(test_labels, test_predictions, classes, name = name_p)
