@@ -1,3 +1,4 @@
+import time
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix
@@ -12,6 +13,8 @@ from torch.utils.data import Dataset, DataLoader
 import random
 import sys
 from astropy.io import fits
+
+start_time = time.time()
 
 class ImageDataset(Dataset):
     """Dataset of Images and Labels"""
@@ -200,7 +203,7 @@ def train_cnn(
 
             #Performance monitoring if desired
             if monitor:
-                if i_batch % 200 == 0:
+                if i_batch % 200 == 0: #before batch 200
                     train_output = cnn(train_dataset[0:validation_size]['image'])
                     validation_output = cnn(test_dataset[0:validation_size]['image'])
 
@@ -279,22 +282,22 @@ def plot_performance(cnn, name):
 
 
 #### MAIN BODY CODE
-torch.manual_seed(0)
-random.seed(0)
-np.random.seed(0)
+torch.manual_seed(1)
+random.seed(1)
+np.random.seed(1)
 
 # load your images into an array called `images` with shape
 #  (num_objects, num_bands, height, width)
 path = '/Users/jimenagonzalez/research/DSPL/Simulations-Double-Source-Gravitational-Lensing/Data/Sim_complete/'
 
 hdu_list = fits.open(path + 'Double.fits')
-idx = random.sample(range(len(hdu_list[1].data)), 1000)
+idx = random.sample(range(len(hdu_list[1].data)), 500)
 sim = hdu_list[1].data[idx,:] #[:1000]
 hdu_list.close()
 
 
 hdu_list = fits.open(path + 'negative_cases.fits')
-idx = random.sample(range(len(hdu_list[1].data)), 1000)
+idx = random.sample(range(len(hdu_list[1].data)), 500)
 cutouts = hdu_list[1].data[idx,:] #[:1000]
 hdu_list.close()
 
@@ -310,7 +313,8 @@ len_dataset = len(labels)
 train_dataset, test_dataset = make_train_test_datasets(images, labels)
 
 # Make a DataLoader to train the network
-train_dataloader = DataLoader(train_dataset, batch_size=20, shuffle=True, num_workers=4)
+# Larger batch size reducess jumpyness in loss, but takes longer to learn & accuracy is similar
+train_dataloader = DataLoader(train_dataset, batch_size=20, shuffle=True, num_workers=4) 
 
 # Make a CNN
 cnn = CNN(
@@ -326,18 +330,22 @@ cnn = train_cnn(cnn,
 				train_dataset=train_dataset,
 				test_dataset=test_dataset,
 				validation_size=200, #100
-				number_of_training_epochs=150, #150
+				number_of_training_epochs=300, #150
 				monitor=True)
 
 #plot learning rate
-name_p = 'double_0'
+name_p = 'double_b30_1'
 plot_performance(cnn, name_p)
 
 # Use the CNN to classify your whole test dataset
 cnn.eval()
+
+non_binary_predictions = cnn(test_dataset[:]['image'])
+
 test_predictions = torch.max(cnn(test_dataset[:]['image']), 1)[1].data.numpy()  
 test_labels = test_dataset[:]['label'].data.numpy()
 
 # Plot a confusion matrix of your results
 classes = np.unique(labels)
 plot_confusion_matrix(test_labels, test_predictions, classes, name = name_p)
+print("--- %s seconds ---" % (time.time() - start_time))
