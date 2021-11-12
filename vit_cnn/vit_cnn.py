@@ -26,7 +26,7 @@ from astropy.io import fits
 from skimage import io
 import matplotlib.pyplot as plt
 #If using script on terminal
-from tqdm import tqdm
+import tqdm
 #from tqdm.notebook import tqdm
 
 from astropy.visualization import make_lupton_rgb
@@ -55,7 +55,7 @@ class ImageDataset(Dataset):
 
     def __getitem__(self, idx):
         #return python image given the index
-        image = images[idx]
+        image = self.images[idx]
         """
         #Plotting with Astropy and saving as png (not used right now)
         print('Astropy')
@@ -70,9 +70,10 @@ class ImageDataset(Dataset):
         new_image[0], new_image[1], new_image[2] =  self.normalize_image(image)
         new_image = new_image.transpose(1,2,0)
         new_image = Image.fromarray(np.uint8(255*new_image)).convert("RGB")
-        label = labels[idx]
-        data_point = data.iloc[idx].to_dict()
-        return self.transform(new_image), label, image, data_point
+        label = self.labels[idx]
+        data_point = self.data.iloc[idx].to_dict()
+        sample = {'image': self.transform(new_image), 'label': label, 'img': image, 'data': data_point}
+        return sample
     
     def normalize_image(self, image):
         image_g = (image[0]-np.mean(image[0]))/ np.std(image[0])
@@ -136,16 +137,16 @@ def make_train_test_datasets(images, data, labels, test_size=0.2, transform=None
 # In[4]:
 
 
-num_pos, num_neg = 200, 200
+num_pos, num_neg = 400, 400
 path = '/Users/jimenagonzalez/research/DSPL/Simulations-Double-Source-Gravitational-Lensing/Data/Sim_complete/'
 
-hdu_list = fits.open(path + 'exp/33.fits')
+hdu_list = fits.open('34.fits')
 idx = random.sample(range(len(hdu_list[1].data)), num_pos)
 images_pos = hdu_list[1].data[idx,:] 
 data_pos = pd.DataFrame(hdu_list[2].data[:][idx])
 labels_pos = np.zeros(num_pos, dtype = np.int64)
 
-hdu_list = fits.open(path + 'negative_cases.fits')
+hdu_list = fits.open('negative_cases.fits')
 idx = random.sample(range(len(hdu_list[1].data)), num_neg)
 images_neg = hdu_list[1].data[idx,:] 
 labels_neg = np.ones(num_neg, dtype = np.int64)
@@ -156,42 +157,31 @@ data_neg = pd.DataFrame(data_neg, columns=['zl/z1', 'm', 'iso', 'E', 'Magni 1'])
 last_column = ['NEG']*num_neg
 data_neg['ID'] = last_column
 
-images = np.concatenate((images_pos, images_neg)).astype(np.float32)
-data = pd.concat([data_pos, data_neg], axis=0).reset_index(drop=True)
-labels = np.concatenate((labels_pos,labels_neg), dtype = np.int64)
+images_dataset = np.concatenate((images_pos, images_neg)).astype(np.float32)
+data_dataset = pd.concat([data_pos, data_neg], axis=0).reset_index(drop=True)
+labels_dataset = np.concatenate((labels_pos,labels_neg), dtype = np.int64)
 
 transform = transforms.Compose([
             transforms.Resize((224, 224)),
             transforms.ToTensor(),
             transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
 
-dataset = ImageDataset(images, data, labels, transform=transform)
-
 
 # In[5]:
 
 
-train_dataset, test_dataset = make_train_test_datasets(images, data, labels, test_size=0.2, transform=transform)
+train_dataset, test_dataset = make_train_test_datasets(images_dataset, data_dataset, labels_dataset, test_size=0.2, transform=transform)
+print('Len train dataset: {}, len test dataset: {}'.format(len(train_dataset), len(test_dataset)))
 
-print('Len train dataset: {}, len test dataset: {} '.format(len(train_dataset), len(test_dataset)))
+
+# In[6]:
+
 
 train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=20, num_workers=0, shuffle=True)
 test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=20, num_workers=0, shuffle=True)
 
 
-
-# In[8]:
-
-
-
-
-
-# In[9]:
-
-
-
-
-# In[10]:
+# In[7]:
 
 
 model = timm.create_model("vit_base_patch16_224", pretrained=True)
@@ -199,7 +189,7 @@ path = 'jx_vit_base_p16_224-80ecf9dd.pth'
 model.load_state_dict(torch.load(path))
 
 
-# In[11]:
+# In[8]:
 
 
 class ViTBase16(nn.Module):
@@ -233,9 +223,10 @@ class ViTBase16(nn.Module):
         self.model.train()
 
         #for i, (data, target, sample_img, sample_data) in tqdm(enumerate(train_loader)):
-        for i, (data, target, sample_img, sample_data) in enumerate(tqdm(train_loader)):
+        for i, sample in enumerate(tqdm(train_loader)):
 
-
+            data, target, sample_img, sample_data = sample['image'], sample['label'] , sample['img'], sample['data']
+            
             # move tensors to GPU if CUDA is available
             if device.type == "cuda":
                 data, target = data.cuda(), target.cuda()
@@ -246,21 +237,22 @@ class ViTBase16(nn.Module):
             output = self.forward(data)
             #output = torch.squeeze(output)
 
-
             #target = target.float()
             # calculate the batch loss
             loss = criterion(output, target)
             # backward pass: compute gradient of the loss with respect to model parameters
             loss.backward()
+            
             # Calculate Accuracy
-            accuracy = (output.argmax(dim=1) == target).float().mean()
+            #accuracy = (output.argmax(dim=1) == target).float().mean()
+            accuracy = sum(output.argmax(dim=1) == target)
             # update training loss and accuracy
             epoch_loss += loss
             epoch_accuracy += accuracy
 
             optimizer.step()
 
-        return epoch_loss / len(train_loader), epoch_accuracy / len(train_loader)
+        return epoch_loss / len(train_loader.dataset), epoch_accuracy / len(train_loader.dataset)
 
     def validate_one_epoch(self, valid_loader, criterion, device):
         # keep track of validation loss
@@ -271,7 +263,9 @@ class ViTBase16(nn.Module):
         # validate the model #
         ######################
         self.model.eval()
-        for data, target, sample_img, sample_data in tqdm(valid_loader):
+        for i, sample in enumerate(tqdm(valid_loader)):
+            data, target, sample_img, sample_data = sample['image'], sample['label'] , sample['img'], sample['data']
+            
             # move tensors to GPU if CUDA is available
             if device.type == "cuda":
                 data, target = data.cuda(), target.cuda()
@@ -282,15 +276,16 @@ class ViTBase16(nn.Module):
                 # calculate the batch loss
                 loss = criterion(output, target)
                 # Calculate Accuracy
-                accuracy = (output.argmax(dim=1) == target).float().mean()
+                #accuracy = (output.argmax(dim=1) == target).float().mean()
+                accuracy = sum(output.argmax(dim=1) == target)
                 # update average validation loss and accuracy
                 valid_loss += loss
                 valid_accuracy += accuracy
 
-        return valid_loss / len(valid_loader), valid_accuracy / len(valid_loader)
+        return valid_loss / len(valid_loader.dataset), valid_accuracy / len(valid_loader.dataset)
 
 
-# In[12]:
+# In[9]:
 
 
 model = ViTBase16(n_classes=2, pretrained=True)
@@ -299,21 +294,18 @@ model = ViTBase16(n_classes=2, pretrained=True)
 device = torch.device("cuda")
 
 criterion = nn.CrossEntropyLoss()
-#criterion = nn.BCEWithLogitsLoss()
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
-# device = xm.xla_device()
 model.to(device)
 
-# lr = LR * xm.xrt_world_size()
 learning_rate = 0.0001
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
 
-# In[13]:
+# In[10]:
 
 
-def fit_tpu(model, epochs, device, criterion, optimizer, train_loader, valid_loader=None):
+def fit_tpu(model, name_model, epochs, device, criterion, optimizer, train_loader, valid_loader=None):
     
     best_val_acc = 0.0 # track of best accuracy
 
@@ -351,18 +343,18 @@ def fit_tpu(model, epochs, device, criterion, optimizer, train_loader, valid_loa
                 setattr(model, 'loss_valid', valid_losses)
                 setattr(model, 'train_acc', train_accs)
                 setattr(model, 'validation_acc', valid_accs)
-                torch.save(model, 'other.pt')
+                torch.save(model, name_model)
                 best_val_acc = valid_acc
-
+    """
     return {
         "train_loss": train_losses,
         "valid_losses": valid_losses,
         "train_acc": train_accs,
         "valid_acc": valid_accs,
-    }
+    }"""
 
 
-# In[14]:
+# In[11]:
 
 
 def plot_performance(cnn):
@@ -393,19 +385,14 @@ def plot_performance(cnn):
 # In[ ]:
 
 
-#mem_usage = memory_usage(-1, interval=1000, timeout=None)
-
-#logs = fit_tpu(model=model, epochs=1, device=device, criterion=criterion, optimizer=optimizer, 
-#               train_loader=train_loader, valid_loader=test_loader)
-
-#model, epochs, device, criterion, optimizer, train_loader, valid_loader=None
-mem_usage = memory_usage(( fit_tpu, (model, 3, device, criterion, optimizer, train_loader, test_loader)))
+name_model = 'other.pt'
+#                          model, name_model, epochs, device, criterion, optimizer, train_loader, valid_loader=None
+mem_usage = memory_usage(( fit_tpu, (model, name_model, 10, device, criterion, optimizer, train_loader, test_loader)))
 
 
 # In[ ]:
 
 
-#print(mem_usage)
 print('Maximum memory usage: %s' % max(mem_usage))
 
 
@@ -413,76 +400,100 @@ print('Maximum memory usage: %s' % max(mem_usage))
 
 
 name = 'other.pt'#'model.pt'#'other.pt' 
-CNN_test = torch.load(name)
-print('Maximum validation accuracy: {.:2f}%'.format(100*CNN_test.validation_acc[-1]))
+model_test = torch.load(name)
+print('Maximum validation accuracy: {:.2f}%'.format(100*model_test.validation_acc[-1].item()))
 
 
 # In[ ]:
 
 
-plot_performance(CNN_test)
+plot_performance(model_test)
 
 
 # In[ ]:
 
 
-new_test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=1, num_workers=0, 
-                                              shuffle=True)
-#print(len(new_test_loader))
-
-#print(new_test_loader)
+new_test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=1, num_workers=0, shuffle=True)
 
 
 # In[ ]:
 
 
-model = CNN_test
-false_pos, false_neg = np.zeros((1,3,46,46)), np.zeros((1,3,46,46))
-true_pos, true_neg = np.zeros((1,3,46,46)), np.zeros((1,3,46,46))
-columns = ['zl/z1', 'm', 'iso', 'E', 'Magni 1', 'ID']
-data_right, data_wrong = pd.DataFrame(columns=columns), pd.DataFrame(columns=columns)
+model = model_test
+right_pos_img, wrong_pos_img = np.zeros((1,3,46,46)), np.zeros((1,3,46,46))
+right_neg_img, wrong_neg_img = np.zeros((1,3,46,46)), np.zeros((1,3,46,46))
+columns = ['zl/z1', 'm', 'iso', 'E', 'Magni 1', 'ID', 'Prob']
+prob_list = []
+right_pos, wrong_pos = pd.DataFrame(columns=columns), pd.DataFrame(columns=columns)
+right_neg, wrong_neg = pd.DataFrame(columns=columns), pd.DataFrame(columns=columns)
 
-for i_batch, (sample_image, sample_label, sample_img, sample_data) in enumerate(tqdm(new_test_loader)):
+for i_batch, sample in enumerate(tqdm(new_test_loader)):
+    sample_image, sample_label, sample_img, sample_data = sample['image'], sample['label'] , sample['img'], sample['data']
+    
+    #if(i_batch <= 50): continue
     output = model(sample_image)
     predicted = output.argmax(dim=1)
     my_df = pd.DataFrame.from_dict(sample_data)
-    if(sample_label.item() == 0):
-        if(predicted.item() == 0):
-            true_pos = np.append(true_pos, [np.array(sample_img[0])], axis = 0)
-            data_right = data_right.append(pd.DataFrame.from_dict(sample_data), ignore_index=True)
-        else:
-            false_pos = np.append(false_pos, [np.array(sample_img[0])], axis = 0)
-            data_wrong = data_wrong.append(pd.DataFrame.from_dict(sample_data), ignore_index=True)
-    else:
-        if(predicted.item() == 1): true_neg = np.append(true_neg, [np.array(sample_img[0])], axis = 0)
-        else: false_neg = np.append(false_neg, [np.array(sample_img[0])], axis = 0)
-    if(i_batch == 600): break
     
-false_pos = np.delete(false_pos, 0, axis = 0)
-false_neg = np.delete(false_neg, 0, axis = 0)
-true_pos = np.delete(true_pos, 0, axis = 0)
-true_neg = np.delete(true_neg, 0, axis = 0)
+    prob = nn.Softmax(dim=1)(output)
+    prob = prob[:,0].detach().numpy()[0]
+    prob_list.append(prob)
+    
+    new_df = pd.DataFrame.from_dict(sample_data)
+    new_df['Prob'] = prob
+    
+    if(sample_label.item() == 0 and predicted.item() == 0):
+        right_pos_img = np.append(right_pos_img, [np.array(sample_img[0])], axis = 0)
+        right_pos = right_pos.append(new_df, ignore_index=True)
+    elif(sample_label.item() == 0 and predicted.item() == 1):
+        wrong_pos_img = np.append(wrong_pos_img, [np.array(sample_img[0])], axis = 0)
+        wrong_pos = wrong_pos.append(new_df, ignore_index=True)
+    if(sample_label.item() == 1 and predicted.item() == 1): 
+        right_neg_img = np.append(right_neg_img, [np.array(sample_img[0])], axis = 0)
+        right_neg = right_neg.append(new_df, ignore_index=True)
+    elif(sample_label.item() == 1 and predicted.item() == 0): 
+        wrong_neg_img = np.append(wrong_neg_img, [np.array(sample_img[0])], axis = 0)
+        wrong_neg = wrong_neg.append(new_df, ignore_index=True)
+    
+    
+right_pos_img = np.delete(right_pos_img, 0, axis = 0)
+wrong_pos_img = np.delete(wrong_pos_img, 0, axis = 0)
+right_neg_img = np.delete(right_neg_img, 0, axis = 0)
+wrong_neg_img = np.delete(wrong_neg_img, 0, axis = 0)
 
 
 # In[ ]:
 
 
-print('Shape false positives: {}'.format(false_pos.shape))
-print('Shape false negatives: {}'.format(false_neg.shape))
-print('Shape true positives: {}'.format(true_pos.shape))
-print('Shape true positives: {}'.format(true_neg.shape))
+plt.figure(figsize=(10,6))
+plt.title('Probability labeled as Positive')
+plt.hist(prob_list, 100, color = "skyblue")
+plt.savefig('Prob_Pos Distribution.png', bbox_inches='tight')
+#plt.show()
 
 
 # In[ ]:
 
 
-#data_right.head()
+print(right_pos_img.shape)
+print(wrong_pos_img.shape)
+print(right_neg_img.shape)
+print(wrong_neg_img.shape)
 
 
 # In[ ]:
 
 
-def make_plot_all(objects, title):
+print(np.mean(wrong_neg['Prob']))
+print(np.mean(right_pos['Prob']))
+print(np.mean(wrong_pos['Prob']))
+print(np.mean(right_neg['Prob']))
+
+
+# In[ ]:
+
+
+def make_plot_all(objects, title, prob_list):
     print(title)
     for i in range(len(objects)):
         if(i%4 == 0):
@@ -490,39 +501,35 @@ def make_plot_all(objects, title):
             for j in range(4):
                 if(i+j > len(objects)-1): break
                 plt.subplot(1,4,j+1)
+                plt.title(prob_list[i+j])
                 rgb = make_lupton_rgb(objects[i+j][2], objects[i+j][1], objects[i+j][0], Q=11., stretch=40.)
                 plt.imshow(rgb, aspect='equal')
                 plt.xticks([], [])
                 plt.yticks([], []) 
-            plt.savefig(title, bbox_inches='tight') 
+            #plt.show()
+            plt.savefig(title+'_'+str(i+j), bbox_inches='tight') 
 
 
 # In[ ]:
 
 
-#make_plot_all(false_pos, 'False positives')
+make_plot_all(wrong_neg_img, 'Wrong negatives', wrong_neg['Prob'])
 
 
 # In[ ]:
 
 
-#make_plot_all(false_neg, 'False negatives')
+make_plot_all(wrong_pos_img, 'Wrong positives', wrong_pos['Prob'])
 
 
 # In[ ]:
 
 
-#make_plot_all(true_pos, 'True positives')
+make_plot_all(right_pos_img, 'Right positives', right_pos['Prob'])
 
 
 # In[ ]:
 
 
-#make_plot_all(true_neg, 'True negatives')
-
-
-# In[ ]:
-
-
-
+make_plot_all(right_neg_img, 'Right negatives', right_neg['Prob'])
 
