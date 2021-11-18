@@ -20,20 +20,39 @@ from transformers import ViTFeatureExtractor, ViTForImageClassification
 
 from memory_profiler import memory_usage
 import random
+import os
 import gc
 from astropy.io import fits
 
 from skimage import io
 import matplotlib.pyplot as plt
 #If using script on terminal
-import tqdm
-#from tqdm.notebook import tqdm
+#from tqdm import tqdm
+from tqdm.notebook import tqdm
 
 from astropy.visualization import make_lupton_rgb
 plt.style.use('dark_background')
 
 
 # In[2]:
+
+
+def seed_everything(seed):
+    """
+    Seeds basic parameters for reproductibility of results
+    Arguments:
+        seed {int} -- Number of the seed
+    """
+    random.seed(seed)
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+
+# In[3]:
 
 
 class ImageDataset(Dataset):
@@ -106,7 +125,7 @@ class ImageDataset(Dataset):
         plt.show()
 
 
-# In[3]:
+# In[4]:
 
 
 def make_train_test_datasets(images, data, labels, test_size=0.2, transform=None):
@@ -134,19 +153,21 @@ def make_train_test_datasets(images, data, labels, test_size=0.2, transform=None
             ImageDataset(test_images, test_data, test_labels, transform=transform))
 
 
-# In[4]:
+# In[5]:
 
 
-num_pos, num_neg = 400, 400
+seed_everything(101)
+num_pos, num_neg = 40, 40
 path = '/Users/jimenagonzalez/research/DSPL/Simulations-Double-Source-Gravitational-Lensing/Data/Sim_complete/'
+#path = ''
 
-hdu_list = fits.open('34.fits')
+hdu_list = fits.open(path + 'exp/34.fits')
 idx = random.sample(range(len(hdu_list[1].data)), num_pos)
 images_pos = hdu_list[1].data[idx,:] 
 data_pos = pd.DataFrame(hdu_list[2].data[:][idx])
 labels_pos = np.zeros(num_pos, dtype = np.int64)
 
-hdu_list = fits.open('negative_cases.fits')
+hdu_list = fits.open(path + 'negative_cases.fits')
 idx = random.sample(range(len(hdu_list[1].data)), num_neg)
 images_neg = hdu_list[1].data[idx,:] 
 labels_neg = np.ones(num_neg, dtype = np.int64)
@@ -167,21 +188,21 @@ transform = transforms.Compose([
             transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
 
 
-# In[5]:
+# In[6]:
 
 
 train_dataset, test_dataset = make_train_test_datasets(images_dataset, data_dataset, labels_dataset, test_size=0.2, transform=transform)
 print('Len train dataset: {}, len test dataset: {}'.format(len(train_dataset), len(test_dataset)))
 
 
-# In[6]:
+# In[7]:
 
 
 train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=20, num_workers=0, shuffle=True)
 test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=20, num_workers=0, shuffle=True)
 
 
-# In[7]:
+# In[8]:
 
 
 model = timm.create_model("vit_base_patch16_224", pretrained=True)
@@ -189,7 +210,7 @@ path = 'jx_vit_base_p16_224-80ecf9dd.pth'
 model.load_state_dict(torch.load(path))
 
 
-# In[8]:
+# In[9]:
 
 
 class ViTBase16(nn.Module):
@@ -285,7 +306,7 @@ class ViTBase16(nn.Module):
         return valid_loss / len(valid_loader.dataset), valid_accuracy / len(valid_loader.dataset)
 
 
-# In[9]:
+# In[10]:
 
 
 model = ViTBase16(n_classes=2, pretrained=True)
@@ -302,7 +323,7 @@ learning_rate = 0.0001
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
 
-# In[10]:
+# In[11]:
 
 
 def fit_tpu(model, name_model, epochs, device, criterion, optimizer, train_loader, valid_loader=None):
@@ -354,7 +375,7 @@ def fit_tpu(model, name_model, epochs, device, criterion, optimizer, train_loade
     }"""
 
 
-# In[11]:
+# In[12]:
 
 
 def plot_performance(cnn):
@@ -378,123 +399,157 @@ def plot_performance(cnn):
     ax2.scatter(x, valid_acc, color = 'limegreen', alpha = 0.8,  label = 'Validation Accuracy')
     ax2.legend()
     
-    plt.savefig('Performance.png', bbox_inches='tight')
-    #plt.show(block=True)
+    #plt.savefig('Performance.png', bbox_inches='tight')
+    plt.show(block=True)
 
 
-# In[ ]:
+# In[13]:
 
 
 name_model = 'other.pt'
 #                          model, name_model, epochs, device, criterion, optimizer, train_loader, valid_loader=None
-mem_usage = memory_usage(( fit_tpu, (model, name_model, 10, device, criterion, optimizer, train_loader, test_loader)))
+mem_usage = memory_usage(( fit_tpu, (model, name_model, 1, device, criterion, optimizer, train_loader, test_loader)))
 
 
-# In[ ]:
+# In[14]:
 
 
 print('Maximum memory usage: %s' % max(mem_usage))
 
 
-# In[ ]:
+# In[15]:
 
 
 name = 'other.pt'#'model.pt'#'other.pt' 
-model_test = torch.load(name)
-print('Maximum validation accuracy: {:.2f}%'.format(100*model_test.validation_acc[-1].item()))
+model = torch.load(name)
+print('Maximum validation accuracy: {:.2f}%'.format(100*model.validation_acc[-1].item()))
 
 
-# In[ ]:
+# In[16]:
 
 
-plot_performance(model_test)
+plot_performance(model)
 
 
-# In[ ]:
+# In[17]:
 
 
 new_test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=1, num_workers=0, shuffle=True)
 
 
-# In[ ]:
+# In[18]:
 
 
-model = model_test
-right_pos_img, wrong_pos_img = np.zeros((1,3,46,46)), np.zeros((1,3,46,46))
-right_neg_img, wrong_neg_img = np.zeros((1,3,46,46)), np.zeros((1,3,46,46))
-columns = ['zl/z1', 'm', 'iso', 'E', 'Magni 1', 'ID', 'Prob']
-prob_list = []
-right_pos, wrong_pos = pd.DataFrame(columns=columns), pd.DataFrame(columns=columns)
-right_neg, wrong_neg = pd.DataFrame(columns=columns), pd.DataFrame(columns=columns)
+def testing_analysis(prob_lim):
+    right_pos_img, wrong_pos_img = np.zeros((1,3,46,46)), np.zeros((1,3,46,46))
+    right_neg_img, wrong_neg_img = np.zeros((1,3,46,46)), np.zeros((1,3,46,46))
+    columns = ['zl/z1', 'm', 'iso', 'E', 'Magni 1', 'ID', 'Prob']
+    prob_list = []
+    right_pos, wrong_pos = pd.DataFrame(columns=columns), pd.DataFrame(columns=columns)
+    right_neg, wrong_neg = pd.DataFrame(columns=columns), pd.DataFrame(columns=columns)
 
-for i_batch, sample in enumerate(tqdm(new_test_loader)):
-    sample_image, sample_label, sample_img, sample_data = sample['image'], sample['label'] , sample['img'], sample['data']
+    for i_batch, sample in enumerate(tqdm(new_test_loader)):
+        sample_image, sample_label, sample_img, sample_data = sample['image'], sample['label'] , sample['img'], sample['data']
     
-    #if(i_batch <= 50): continue
-    output = model(sample_image)
-    predicted = output.argmax(dim=1)
-    my_df = pd.DataFrame.from_dict(sample_data)
+        #if(i_batch <= 50): continue
+        output = model(sample_image)
+        predicted = output.argmax(dim=1).item()
+        my_df = pd.DataFrame.from_dict(sample_data)
     
-    prob = nn.Softmax(dim=1)(output)
-    prob = prob[:,0].detach().numpy()[0]
-    prob_list.append(prob)
+        prob = nn.Softmax(dim=1)(output)
+        prob = prob[:,0].detach().numpy()[0]
+        prob_list.append(prob)
     
-    new_df = pd.DataFrame.from_dict(sample_data)
-    new_df['Prob'] = prob
+        predicted = 0 if prob >= prob_lim else 1
     
-    if(sample_label.item() == 0 and predicted.item() == 0):
-        right_pos_img = np.append(right_pos_img, [np.array(sample_img[0])], axis = 0)
-        right_pos = right_pos.append(new_df, ignore_index=True)
-    elif(sample_label.item() == 0 and predicted.item() == 1):
-        wrong_pos_img = np.append(wrong_pos_img, [np.array(sample_img[0])], axis = 0)
-        wrong_pos = wrong_pos.append(new_df, ignore_index=True)
-    if(sample_label.item() == 1 and predicted.item() == 1): 
-        right_neg_img = np.append(right_neg_img, [np.array(sample_img[0])], axis = 0)
-        right_neg = right_neg.append(new_df, ignore_index=True)
-    elif(sample_label.item() == 1 and predicted.item() == 0): 
-        wrong_neg_img = np.append(wrong_neg_img, [np.array(sample_img[0])], axis = 0)
-        wrong_neg = wrong_neg.append(new_df, ignore_index=True)
+        new_df = pd.DataFrame.from_dict(sample_data)
+        new_df['Prob'] = prob
+    
+        if(sample_label.item() == 0 and predicted == 0):
+            right_pos_img = np.append(right_pos_img, [np.array(sample_img[0])], axis = 0)
+            right_pos = right_pos.append(new_df, ignore_index=True)
+        elif(sample_label.item() == 0 and predicted == 1):
+            wrong_pos_img = np.append(wrong_pos_img, [np.array(sample_img[0])], axis = 0)
+            wrong_pos = wrong_pos.append(new_df, ignore_index=True)
+        if(sample_label.item() == 1 and predicted == 1): 
+            right_neg_img = np.append(right_neg_img, [np.array(sample_img[0])], axis = 0)
+            right_neg = right_neg.append(new_df, ignore_index=True)
+        elif(sample_label.item() == 1 and predicted == 0): 
+            wrong_neg_img = np.append(wrong_neg_img, [np.array(sample_img[0])], axis = 0)
+            wrong_neg = wrong_neg.append(new_df, ignore_index=True)
     
     
-right_pos_img = np.delete(right_pos_img, 0, axis = 0)
-wrong_pos_img = np.delete(wrong_pos_img, 0, axis = 0)
-right_neg_img = np.delete(right_neg_img, 0, axis = 0)
-wrong_neg_img = np.delete(wrong_neg_img, 0, axis = 0)
+    right_pos_img = np.delete(right_pos_img, 0, axis = 0)
+    wrong_pos_img = np.delete(wrong_pos_img, 0, axis = 0)
+    right_neg_img = np.delete(right_neg_img, 0, axis = 0)
+    wrong_neg_img = np.delete(wrong_neg_img, 0, axis = 0)
+    
+    FPR = len(wrong_neg_img)/(len(wrong_neg_img) + len(right_neg_img))*100
+    TPR = len(right_pos_img)/(len(right_pos_img) + len(wrong_pos_img))*100
+    
+    images = [right_pos_img, wrong_pos_img, right_neg_img, wrong_neg_img]
+    data = [right_pos, wrong_pos, right_neg, wrong_neg]
+    rates = [FPR, TPR]
+    
+    return(images, data, rates, prob_list)
 
 
-# In[ ]:
+# In[19]:
 
 
+prob_lim = 0.5
+images, data, rates, prob_list = testing_analysis(prob_lim)
+right_pos_img, wrong_pos_img, right_neg_img, wrong_neg_img = images[0], images[1], images[2], images[3]
+right_pos, wrong_pos, right_neg, wrong_neg = data[0], data[1], data[2], data[3]
+FPR, TPR = rates[0], rates[1]
+
+
+# In[20]:
+
+
+#"""
 plt.figure(figsize=(10,6))
 plt.title('Probability labeled as Positive')
 plt.hist(prob_list, 100, color = "skyblue")
-plt.savefig('Prob_Pos Distribution.png', bbox_inches='tight')
-#plt.show()
+#plt.savefig('Prob_Pos Distribution.png', bbox_inches='tight')
+plt.show()
+#"""
 
 
-# In[ ]:
+# In[21]:
 
 
-print(right_pos_img.shape)
-print(wrong_pos_img.shape)
-print(right_neg_img.shape)
-print(wrong_neg_img.shape)
+#"""
+print('Right positives: ' + str(right_pos_img.shape))
+print('Wrong positives: ' + str(wrong_pos_img.shape))
+print('Right negatives: ' + str(right_neg_img.shape))
+print('Wrong negatives: ' + str(wrong_neg_img.shape))
+#"""
 
 
-# In[ ]:
+# In[22]:
 
 
+print('True positive rate: ' + str(TPR) + '%')
+print('False positive rate: ' + str(FPR) + '%')
+
+
+# In[23]:
+
+
+#"""
 print(np.mean(wrong_neg['Prob']))
 print(np.mean(right_pos['Prob']))
 print(np.mean(wrong_pos['Prob']))
 print(np.mean(right_neg['Prob']))
+#"""
 
 
-# In[ ]:
+# In[24]:
 
 
 def make_plot_all(objects, title, prob_list):
-    print(title)
+    #print(title)
     for i in range(len(objects)):
         if(i%4 == 0):
             plt.figure(figsize=(12,8))
@@ -506,29 +561,30 @@ def make_plot_all(objects, title, prob_list):
                 plt.imshow(rgb, aspect='equal')
                 plt.xticks([], [])
                 plt.yticks([], []) 
-            #plt.show()
-            plt.savefig(title+'_'+str(i+j), bbox_inches='tight') 
+            plt.show() 
+            #plt.savefig(title+'_'+str(i+j), bbox_inches='tight') 
+            plt.close()
 
 
-# In[ ]:
+# In[25]:
 
 
 make_plot_all(wrong_neg_img, 'Wrong negatives', wrong_neg['Prob'])
 
 
-# In[ ]:
+# In[26]:
 
 
 make_plot_all(wrong_pos_img, 'Wrong positives', wrong_pos['Prob'])
 
 
-# In[ ]:
+# In[27]:
 
 
 make_plot_all(right_pos_img, 'Right positives', right_pos['Prob'])
 
 
-# In[ ]:
+# In[28]:
 
 
 make_plot_all(right_neg_img, 'Right negatives', right_neg['Prob'])
