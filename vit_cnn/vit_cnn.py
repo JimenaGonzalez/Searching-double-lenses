@@ -157,17 +157,20 @@ def make_train_test_datasets(images, data, labels, test_size=0.2, transform=None
 
 
 seed_everything(101)
-num_pos, num_neg = 40, 40
-path = '/Users/jimenagonzalez/research/DSPL/Simulations-Double-Source-Gravitational-Lensing/Data/Sim_complete/'
-#path = ''
 
-hdu_list = fits.open(path + 'exp/34.fits')
+num_pos, num_neg = 40, 40
+num_workers = 0
+num_epochs = 1
+script = False
+
+
+hdu_list = fits.open('34.fits')
 idx = random.sample(range(len(hdu_list[1].data)), num_pos)
 images_pos = hdu_list[1].data[idx,:] 
 data_pos = pd.DataFrame(hdu_list[2].data[:][idx])
 labels_pos = np.zeros(num_pos, dtype = np.int64)
 
-hdu_list = fits.open(path + 'negative_cases.fits')
+hdu_list = fits.open('negative_cases.fits')
 idx = random.sample(range(len(hdu_list[1].data)), num_neg)
 images_neg = hdu_list[1].data[idx,:] 
 labels_neg = np.ones(num_neg, dtype = np.int64)
@@ -198,8 +201,8 @@ print('Len train dataset: {}, len test dataset: {}'.format(len(train_dataset), l
 # In[7]:
 
 
-train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=20, num_workers=0, shuffle=True)
-test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=20, num_workers=0, shuffle=True)
+train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=20, num_workers=num_workers, shuffle=True)
+test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=20, num_workers=num_workers, shuffle=True)
 
 
 # In[8]:
@@ -399,8 +402,12 @@ def plot_performance(cnn):
     ax2.scatter(x, valid_acc, color = 'limegreen', alpha = 0.8,  label = 'Validation Accuracy')
     ax2.legend()
     
-    #plt.savefig('Performance.png', bbox_inches='tight')
-    plt.show(block=True)
+    if(script):
+        plt.savefig('Performance.png', bbox_inches='tight')
+        plt.close()
+    else: 
+        plt.show(block=True)
+    
 
 
 # In[13]:
@@ -408,13 +415,13 @@ def plot_performance(cnn):
 
 name_model = 'other.pt'
 #                          model, name_model, epochs, device, criterion, optimizer, train_loader, valid_loader=None
-mem_usage = memory_usage(( fit_tpu, (model, name_model, 1, device, criterion, optimizer, train_loader, test_loader)))
+#mem_usage = memory_usage(( fit_tpu, (model, name_model, num_epochs, device, criterion, optimizer, train_loader, test_loader)))
 
 
 # In[14]:
 
 
-print('Maximum memory usage: %s' % max(mem_usage))
+#print('Maximum memory usage: %s' % max(mem_usage))
 
 
 # In[15]:
@@ -434,7 +441,7 @@ plot_performance(model)
 # In[17]:
 
 
-new_test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=1, num_workers=0, shuffle=True)
+new_test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=1, num_workers=num_workers, shuffle=True)
 
 
 # In[18]:
@@ -507,45 +514,41 @@ FPR, TPR = rates[0], rates[1]
 # In[20]:
 
 
-#"""
-plt.figure(figsize=(10,6))
-plt.title('Probability labeled as Positive')
-plt.hist(prob_list, 100, color = "skyblue")
-#plt.savefig('Prob_Pos Distribution.png', bbox_inches='tight')
-plt.show()
-#"""
+def prob_distribution(prob_list):
+    plt.figure(figsize=(10,6))
+    plt.title('Probability labeled as Positive')
+    plt.hist(prob_list, 100, color = "skyblue")
+    if(script):
+        plt.savefig('Prob_Pos Distribution.png', bbox_inches='tight')
+        plt.close()
+    else: 
+        plt.show()
 
 
 # In[21]:
 
 
-#"""
-print('Right positives: ' + str(right_pos_img.shape))
-print('Wrong positives: ' + str(wrong_pos_img.shape))
-print('Right negatives: ' + str(right_neg_img.shape))
-print('Wrong negatives: ' + str(wrong_neg_img.shape))
-#"""
+#prob_distribution(prob_list)
 
 
 # In[22]:
 
 
+"""
+print('Right positives: ' + str(right_pos_img.shape))
+print('Wrong positives: ' + str(wrong_pos_img.shape))
+print('Right negatives: ' + str(right_neg_img.shape))
+print('Wrong negatives: ' + str(wrong_neg_img.shape))
 print('True positive rate: ' + str(TPR) + '%')
 print('False positive rate: ' + str(FPR) + '%')
+print('Mean prob. right positives: ' + str(np.mean(right_pos['Prob'])))
+print('Mean prob. wrong positives: ' + str(np.mean(wrong_pos['Prob'])))
+print('Mean prob. right negatives: ' + str(np.mean(right_neg['Prob'])))
+print('Mean prob. wrong negatives: ' + str(np.mean(wrong_neg['Prob'])))
+"""
 
 
 # In[23]:
-
-
-#"""
-print(np.mean(wrong_neg['Prob']))
-print(np.mean(right_pos['Prob']))
-print(np.mean(wrong_pos['Prob']))
-print(np.mean(right_neg['Prob']))
-#"""
-
-
-# In[24]:
 
 
 def make_plot_all(objects, title, prob_list):
@@ -561,31 +564,71 @@ def make_plot_all(objects, title, prob_list):
                 plt.imshow(rgb, aspect='equal')
                 plt.xticks([], [])
                 plt.yticks([], []) 
-            plt.show() 
-            #plt.savefig(title+'_'+str(i+j), bbox_inches='tight') 
-            plt.close()
+            if(script):
+                plt.savefig(title+'_'+str(i+j), bbox_inches='tight')
+                plt.close()
+            else: 
+                plt.show()
+                
+
+
+# In[24]:
+
+
+#make_plot_all(wrong_neg_img, 'Wrong negatives', wrong_neg['Prob'])
 
 
 # In[25]:
 
 
-make_plot_all(wrong_neg_img, 'Wrong negatives', wrong_neg['Prob'])
+#make_plot_all(wrong_pos_img, 'Wrong positives', wrong_pos['Prob'])
 
 
 # In[26]:
 
 
-make_plot_all(wrong_pos_img, 'Wrong positives', wrong_pos['Prob'])
+#make_plot_all(right_pos_img, 'Right positives', right_pos['Prob'])
 
 
 # In[27]:
 
 
-make_plot_all(right_pos_img, 'Right positives', right_pos['Prob'])
+#make_plot_all(right_neg_img, 'Right negatives', right_neg['Prob'])
 
 
-# In[28]:
+# In[34]:
 
 
-make_plot_all(right_neg_img, 'Right negatives', right_neg['Prob'])
+prob_lim = np.linspace(0, 1., 20)
+FPR_list, TPR_list = [], []
+for prob in prob_lim:
+    images, data, rates, prob_list = testing_analysis(prob)
+    FPR, TPR = rates[0], rates[1]
+    FPR_list.append(FPR)
+    TPR_list.append(TPR)
+
+
+# In[35]:
+
+
+def ROC_curve(FPR_list, TPR_list):
+    plt.figure(figsize=(6,6))
+    plt.plot(FPR_list, TPR_list, 'o')
+    if(script):
+        plt.savefig('ROC curve', bbox_inches='tight')
+        plt.close()
+    else:
+        plt.show()
+
+
+# In[36]:
+
+
+ROC_curve(FPR_list, TPR_list)
+
+
+# In[ ]:
+
+
+
 
