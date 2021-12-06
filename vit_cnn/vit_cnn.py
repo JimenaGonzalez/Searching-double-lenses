@@ -27,8 +27,8 @@ from astropy.io import fits
 from skimage import io
 import matplotlib.pyplot as plt
 #If using script on terminal
-#from tqdm import tqdm
-from tqdm.notebook import tqdm
+from tqdm import tqdm
+#from tqdm.notebook import tqdm
 
 from astropy.visualization import make_lupton_rgb
 plt.style.use('dark_background')
@@ -158,10 +158,10 @@ def make_train_test_datasets(images, data, labels, test_size=0.2, transform=None
 
 seed_everything(101)
 
-num_pos, num_neg = 40, 40
-num_workers = 0
+num_pos, num_neg = 9000, 9000
+num_workers = 16
 num_epochs = 1
-script = False
+script = True
 
 
 hdu_list = fits.open('34.fits')
@@ -427,7 +427,7 @@ name_model = 'other.pt'
 # In[15]:
 
 
-name = 'other.pt'#'model.pt'#'other.pt' 
+name = '33_model.pt'#'model.pt'#'other.pt' 
 model = torch.load(name)
 print('Maximum validation accuracy: {:.2f}%'.format(100*model.validation_acc[-1].item()))
 
@@ -504,7 +504,7 @@ def testing_analysis(prob_lim):
 # In[19]:
 
 
-prob_lim = 0.5
+prob_lim = 0.95
 images, data, rates, prob_list = testing_analysis(prob_lim)
 right_pos_img, wrong_pos_img, right_neg_img, wrong_neg_img = images[0], images[1], images[2], images[3]
 right_pos, wrong_pos, right_neg, wrong_neg = data[0], data[1], data[2], data[3]
@@ -534,7 +534,6 @@ def prob_distribution(prob_list):
 # In[22]:
 
 
-"""
 print('Right positives: ' + str(right_pos_img.shape))
 print('Wrong positives: ' + str(wrong_pos_img.shape))
 print('Right negatives: ' + str(right_neg_img.shape))
@@ -545,7 +544,6 @@ print('Mean prob. right positives: ' + str(np.mean(right_pos['Prob'])))
 print('Mean prob. wrong positives: ' + str(np.mean(wrong_pos['Prob'])))
 print('Mean prob. right negatives: ' + str(np.mean(right_neg['Prob'])))
 print('Mean prob. wrong negatives: ' + str(np.mean(wrong_neg['Prob'])))
-"""
 
 
 # In[23]:
@@ -575,43 +573,39 @@ def make_plot_all(objects, title, prob_list):
 # In[24]:
 
 
-#make_plot_all(wrong_neg_img, 'Wrong negatives', wrong_neg['Prob'])
+make_plot_all(wrong_neg_img, 'Wrong negatives', wrong_neg['Prob'])
 
 
 # In[25]:
 
 
-#make_plot_all(wrong_pos_img, 'Wrong positives', wrong_pos['Prob'])
+make_plot_all(wrong_pos_img, 'Wrong positives', wrong_pos['Prob'])
 
 
 # In[26]:
 
 
-#make_plot_all(right_pos_img, 'Right positives', right_pos['Prob'])
+make_plot_all(right_pos_img, 'Right positives', right_pos['Prob'])
 
 
 # In[27]:
 
 
-#make_plot_all(right_neg_img, 'Right negatives', right_neg['Prob'])
+make_plot_all(right_neg_img, 'Right negatives', right_neg['Prob'])
 
 
-# In[34]:
+# In[28]:
 
 
-prob_lim = np.linspace(0, 1., 20)
-FPR_list, TPR_list = [], []
-for prob in prob_lim:
-    images, data, rates, prob_list = testing_analysis(prob)
-    FPR, TPR = rates[0], rates[1]
-    FPR_list.append(FPR)
-    TPR_list.append(TPR)
-
-
-# In[35]:
-
-
-def ROC_curve(FPR_list, TPR_list):
+def ROC_curve(num_points):
+    prob_lim = np.linspace(0, 1., num_points)
+    FPR_list, TPR_list = [], []
+    for prob in prob_lim:
+        images, data, rates, prob_list = testing_analysis(prob)
+        FPR, TPR = rates[0], rates[1]
+        FPR_list.append(FPR)
+        TPR_list.append(TPR)
+        print(prob, FPR, TPR)
     plt.figure(figsize=(6,6))
     plt.plot(FPR_list, TPR_list, 'o')
     if(script):
@@ -621,14 +615,8 @@ def ROC_curve(FPR_list, TPR_list):
         plt.show()
 
 
-# In[36]:
+# In[29]:
 
 
-ROC_curve(FPR_list, TPR_list)
-
-
-# In[ ]:
-
-
-
+#ROC_curve(5)
 
