@@ -427,7 +427,7 @@ name_model = 'other.pt'
 # In[15]:
 
 
-name = '33_model.pt'#'model.pt'#'other.pt' 
+name = 'model.pt'#'model.pt'#'other.pt' 
 model = torch.load(name)
 print('Maximum validation accuracy: {:.2f}%'.format(100*model.validation_acc[-1].item()))
 
@@ -573,25 +573,25 @@ def make_plot_all(objects, title, prob_list):
 # In[24]:
 
 
-make_plot_all(wrong_neg_img, 'Wrong negatives', wrong_neg['Prob'])
+#make_plot_all(wrong_neg_img, 'Wrong negatives', wrong_neg['Prob'])
 
 
 # In[25]:
 
 
-make_plot_all(wrong_pos_img, 'Wrong positives', wrong_pos['Prob'])
+#make_plot_all(wrong_pos_img, 'Wrong positives', wrong_pos['Prob'])
 
 
 # In[26]:
 
 
-make_plot_all(right_pos_img, 'Right positives', right_pos['Prob'])
+#make_plot_all(right_pos_img, 'Right positives', right_pos['Prob'])
 
 
 # In[27]:
 
 
-make_plot_all(right_neg_img, 'Right negatives', right_neg['Prob'])
+#make_plot_all(right_neg_img, 'Right negatives', right_neg['Prob'])
 
 
 # In[28]:
@@ -608,6 +608,8 @@ def ROC_curve(num_points):
         print(prob, FPR, TPR)
     plt.figure(figsize=(6,6))
     plt.plot(FPR_list, TPR_list, 'o')
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
     if(script):
         plt.savefig('ROC curve', bbox_inches='tight')
         plt.close()
@@ -618,5 +620,5 @@ def ROC_curve(num_points):
 # In[29]:
 
 
-#ROC_curve(5)
+ROC_curve(2)
 
