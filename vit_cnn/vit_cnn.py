@@ -85,7 +85,8 @@ class ImageDataset(Dataset):
         new_image = Image.open('Image.png')
         return(new_image)
         """
-        new_image = np.empty((3, 46, 46))
+        #new_image = np.empty((3, 46, 46)) #I NEED TO CHANGE MY IMAGE SIZES!!!!!!
+        new_image = np.empty((3, 45, 45))
         new_image[0], new_image[1], new_image[2] =  self.normalize_image(image)
         new_image = new_image.transpose(1,2,0)
         new_image = Image.fromarray(np.uint8(255*new_image)).convert("RGB")
@@ -106,10 +107,11 @@ class ImageDataset(Dataset):
     
     def plot_image(self, idx):
         image = images[idx]
-        new_image = np.empty((3, 46, 46))
+        new_image = np.empty((3, 45, 45))
         new_image[0], new_image[1], new_image[2] =  self.normalize_image(image)
         new_image = new_image.transpose(1,2,0)
         new_image = Image.fromarray(np.uint8(255*new_image)).convert("RGB")
+        #new_image = Image.fromarray(np.uint16(255*new_image)).convert("RGB")
         
         plt.figure(figsize=(12,4)) 
         
@@ -158,43 +160,59 @@ def make_train_test_datasets(images, data, labels, test_size=0.2, transform=None
 
 seed_everything(101)
 
-num_pos, num_neg = 9000, 9000
-num_workers = 16
-num_epochs = 1
+num_pos, num_neg = 40, 20
+num_workers = 8
+num_epochs = 2
 script = True
 
 
-hdu_list = fits.open('34.fits')
+hdu_list = fits.open('35.fits')
 idx = random.sample(range(len(hdu_list[1].data)), num_pos)
 images_pos = hdu_list[1].data[idx,:] 
+print(images_pos.shape)
 data_pos = pd.DataFrame(hdu_list[2].data[:][idx])
 labels_pos = np.zeros(num_pos, dtype = np.int64)
 
-hdu_list = fits.open('negative_cases.fits')
+hdu_list = fits.open('negative_redmagic.fits')
 idx = random.sample(range(len(hdu_list[1].data)), num_neg)
-images_neg = hdu_list[1].data[idx,:] 
-labels_neg = np.ones(num_neg, dtype = np.int64)
+images_neg1 = hdu_list[1].data[idx,:] 
+images_neg1 = images_neg1[:,0:3,:,:]
+labels_neg1 = np.ones(num_neg, dtype = np.int64)
+print(images_neg1.shape)
 #Data for negatives, all null
 num_columns = len(data_pos.columns)
-data_neg = np.full((num_neg, num_columns-1), 0)
-data_neg = pd.DataFrame(data_neg, columns=['zl/z1', 'm', 'iso', 'E', 'Magni 1'])
+data_neg1 = np.full((num_neg, num_columns-1), 0)
+data_neg1 = pd.DataFrame(data_neg1, columns=['zl/z1', 'm', 'iso', 'E', 'Magni 1'])
 last_column = ['NEG']*num_neg
-data_neg['ID'] = last_column
+data_neg1['ID'] = last_column
 
-images_dataset = np.concatenate((images_pos, images_neg)).astype(np.float32)
-data_dataset = pd.concat([data_pos, data_neg], axis=0).reset_index(drop=True)
-labels_dataset = np.concatenate((labels_pos,labels_neg), dtype = np.int64)
+hdu_list = fits.open('negative_othergalaxies.fits')
+idx = random.sample(range(len(hdu_list[1].data)), num_neg)
+images_neg2 = hdu_list[1].data[idx,:] 
+images_neg2 = images_neg2[:,0:3,:,:]
+labels_neg2 = np.ones(num_neg, dtype = np.int64)
+print(images_neg2.shape)
+#Data for negatives, all null
+data_neg2 = data_neg1
+
+images_dataset = np.concatenate((images_pos, images_neg1, images_neg2)).astype(np.float32)
+data_dataset = pd.concat([data_pos, data_neg1, data_neg2], axis=0).reset_index(drop=True)
+labels_dataset = np.concatenate((labels_pos, labels_neg1, labels_neg2), dtype = np.int64)
 
 transform = transforms.Compose([
             transforms.Resize((224, 224)),
             transforms.ToTensor(),
             transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
 
+print(images_dataset.shape)
+print(images_dataset.dtype)
+
 
 # In[6]:
 
 
-train_dataset, test_dataset = make_train_test_datasets(images_dataset, data_dataset, labels_dataset, test_size=0.2, transform=transform)
+train_dataset, other_dataset = make_train_test_datasets(images_dataset, data_dataset, labels_dataset, test_size=0.3, transform=transform)
+valid_dataset, test_dataset = make_train_test_datasets(other_dataset.images, other_dataset.data, other_dataset.labels, test_size=0.5, transform=transform)
 print('Len train dataset: {}, len test dataset: {}'.format(len(train_dataset), len(test_dataset)))
 
 
@@ -202,7 +220,8 @@ print('Len train dataset: {}, len test dataset: {}'.format(len(train_dataset), l
 
 
 train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=20, num_workers=num_workers, shuffle=True)
-test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=20, num_workers=num_workers, shuffle=True)
+valid_loader = torch.utils.data.DataLoader(dataset=valid_dataset, batch_size=20, num_workers=num_workers, shuffle=True)
+test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=1, num_workers=num_workers, shuffle=True)
 
 
 # In[8]:
@@ -410,52 +429,46 @@ def plot_performance(cnn):
     
 
 
-# In[13]:
+# In[ ]:
 
 
 name_model = 'other.pt'
 #                          model, name_model, epochs, device, criterion, optimizer, train_loader, valid_loader=None
-#mem_usage = memory_usage(( fit_tpu, (model, name_model, num_epochs, device, criterion, optimizer, train_loader, test_loader)))
+mem_usage = memory_usage(( fit_tpu, (model, name_model, num_epochs, device, criterion, optimizer, train_loader, valid_loader)))
 
 
-# In[14]:
+# In[ ]:
 
 
-#print('Maximum memory usage: %s' % max(mem_usage))
+print('Maximum memory usage: %s' % max(mem_usage))
 
 
-# In[15]:
+# In[ ]:
 
 
-name = 'model.pt'#'model.pt'#'other.pt' 
+name = 'other.pt'#'model.pt'#'other.pt' 
 model = torch.load(name)
 print('Maximum validation accuracy: {:.2f}%'.format(100*model.validation_acc[-1].item()))
 
 
-# In[16]:
+# In[ ]:
 
 
 plot_performance(model)
 
 
-# In[17]:
+# In[ ]:
 
 
-new_test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=1, num_workers=num_workers, shuffle=True)
-
-
-# In[18]:
-
-
-def testing_analysis(prob_lim):
-    right_pos_img, wrong_pos_img = np.zeros((1,3,46,46)), np.zeros((1,3,46,46))
-    right_neg_img, wrong_neg_img = np.zeros((1,3,46,46)), np.zeros((1,3,46,46))
+def testing_analysis(prob_lim, test_loader):
+    right_pos_img, wrong_pos_img = np.zeros((1,3,45,45)), np.zeros((1,3,45,45))
+    right_neg_img, wrong_neg_img = np.zeros((1,3,45,45)), np.zeros((1,3,45,45))
     columns = ['zl/z1', 'm', 'iso', 'E', 'Magni 1', 'ID', 'Prob']
     prob_list = []
     right_pos, wrong_pos = pd.DataFrame(columns=columns), pd.DataFrame(columns=columns)
     right_neg, wrong_neg = pd.DataFrame(columns=columns), pd.DataFrame(columns=columns)
 
-    for i_batch, sample in enumerate(tqdm(new_test_loader)):
+    for i_batch, sample in enumerate(tqdm(test_loader)):
         sample_image, sample_label, sample_img, sample_data = sample['image'], sample['label'] , sample['img'], sample['data']
     
         #if(i_batch <= 50): continue
@@ -501,17 +514,17 @@ def testing_analysis(prob_lim):
     return(images, data, rates, prob_list)
 
 
-# In[19]:
+# In[ ]:
 
 
 prob_lim = 0.95
-images, data, rates, prob_list = testing_analysis(prob_lim)
+images, data, rates, prob_list = testing_analysis(prob_lim, test_loader)
 right_pos_img, wrong_pos_img, right_neg_img, wrong_neg_img = images[0], images[1], images[2], images[3]
 right_pos, wrong_pos, right_neg, wrong_neg = data[0], data[1], data[2], data[3]
 FPR, TPR = rates[0], rates[1]
 
 
-# In[20]:
+# In[ ]:
 
 
 def prob_distribution(prob_list):
@@ -525,19 +538,20 @@ def prob_distribution(prob_list):
         plt.show()
 
 
-# In[21]:
+# In[ ]:
 
 
-#prob_distribution(prob_list)
+prob_distribution(prob_list)
 
 
-# In[22]:
+# In[ ]:
 
 
 print('Right positives: ' + str(right_pos_img.shape))
 print('Wrong positives: ' + str(wrong_pos_img.shape))
 print('Right negatives: ' + str(right_neg_img.shape))
 print('Wrong negatives: ' + str(wrong_neg_img.shape))
+print('Accuracy: '+ str( 100*(len(right_pos_img)+len(right_neg_img)) /len(test_dataset)) + '%')
 print('True positive rate: ' + str(TPR) + '%')
 print('False positive rate: ' + str(FPR) + '%')
 print('Mean prob. right positives: ' + str(np.mean(right_pos['Prob'])))
@@ -546,7 +560,7 @@ print('Mean prob. right negatives: ' + str(np.mean(right_neg['Prob'])))
 print('Mean prob. wrong negatives: ' + str(np.mean(wrong_neg['Prob'])))
 
 
-# In[23]:
+# In[ ]:
 
 
 def make_plot_all(objects, title, prob_list):
@@ -570,46 +584,44 @@ def make_plot_all(objects, title, prob_list):
                 
 
 
-# In[24]:
+# In[ ]:
 
 
-#make_plot_all(wrong_neg_img, 'Wrong negatives', wrong_neg['Prob'])
+make_plot_all(wrong_neg_img, 'Wrong negatives', wrong_neg['Prob'])
 
 
-# In[25]:
+# In[ ]:
 
 
-#make_plot_all(wrong_pos_img, 'Wrong positives', wrong_pos['Prob'])
+make_plot_all(wrong_pos_img, 'Wrong positives', wrong_pos['Prob'])
 
 
-# In[26]:
+# In[ ]:
 
 
-#make_plot_all(right_pos_img, 'Right positives', right_pos['Prob'])
+make_plot_all(right_pos_img, 'Right positives', right_pos['Prob'])
 
 
-# In[27]:
+# In[ ]:
 
 
-#make_plot_all(right_neg_img, 'Right negatives', right_neg['Prob'])
+make_plot_all(right_neg_img, 'Right negatives', right_neg['Prob'])
 
 
-# In[28]:
+# In[ ]:
 
 
 def ROC_curve(num_points):
     prob_lim = np.linspace(0, 1., num_points)
     FPR_list, TPR_list = [], []
     for prob in prob_lim:
-        images, data, rates, prob_list = testing_analysis(prob)
+        images, data, rates, prob_list = testing_analysis(prob, test_loader)
         FPR, TPR = rates[0], rates[1]
         FPR_list.append(FPR)
         TPR_list.append(TPR)
         print(prob, FPR, TPR)
     plt.figure(figsize=(6,6))
     plt.plot(FPR_list, TPR_list, 'o')
-    plt.xlabel('False Positive Rate')
-    plt.ylabel('True Positive Rate')
     if(script):
         plt.savefig('ROC curve', bbox_inches='tight')
         plt.close()
@@ -617,8 +629,66 @@ def ROC_curve(num_points):
         plt.show()
 
 
-# In[29]:
+# In[ ]:
 
 
-ROC_curve(2)
+#ROC_curve(5)
+
+
+# In[ ]:
+
+
+"""
+path = '/Users/jimenagonzalez/research/DSPL/Searching-double-lenses/vit_cnn/Y6_catalog_files/'
+filename = 'DES0456-2458.fits'
+hdu_list = fits.open(path + filename)
+search_ids = pd.DataFrame(hdu_list[1].data)
+search_images = hdu_list[2].data
+search_images.dtype = np.float16
+search_labels = 2*np.ones(len(search_ids), dtype = np.int64)
+
+search_dataset = ImageDataset(search_images, search_ids, search_labels, transform=transform)
+search_loader = torch.utils.data.DataLoader(dataset=search_dataset, batch_size=1, num_workers=num_workers, shuffle=True)
+"""
+
+
+# In[ ]:
+
+
+def search_tile(search_loader, prob_lim):
+    positives = np.zeros((1,4,46,46))
+    columns = ['COADD_OBJECT_ID']
+    positive_ids = pd.DataFrame(columns=columns)
+    
+    for i_batch, sample in enumerate(tqdm(search_loader)):
+        #if(i_batch==5000): break
+        sample_image, sample_label, sample_img, sample_data = sample['image'], sample['label'] , sample['img'], sample['data']
+        
+        output = model(sample_image)
+        predicted = output.argmax(dim=1).item()
+    
+        prob = nn.Softmax(dim=1)(output)
+        prob = prob[:,0].detach().numpy()[0]
+    
+        predicted = 0 if prob >= prob_lim else 1
+    
+        if(predicted == 0):
+            print('Positive!')
+            positives = np.append(positives, [np.array(sample_img[0])], axis = 0)
+            positive_ids = positive_ids.append(pd.DataFrame.from_dict(sample_data), ignore_index=True)
+    
+    positives = np.delete(positives, 0, axis = 0)
+    return(positives, positive_ids)
+
+
+# In[ ]:
+
+
+#positives, positive_ids = search_tile(search_loader, prob_lim)
+
+
+# In[ ]:
+
+
+#positive_ids.to_csv(filename[:-5] + '_pos.fit')
 
