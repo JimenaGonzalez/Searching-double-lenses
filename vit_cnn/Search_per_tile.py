@@ -19,6 +19,7 @@ from transformers import ViTFeatureExtractor, ViTForImageClassification
 
 from PIL import Image, ImageOps
 from astropy.io import fits
+from astropy.table import Table
 from astropy.visualization import make_lupton_rgb
 import matplotlib.pyplot as plt
 plt.style.use('dark_background')
@@ -174,7 +175,7 @@ model = ViTBase16(n_classes=2, pretrained=True)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model.to(device)
 
-name = 'model.pt'#'model.pt'#'other.pt' 
+name = 'exp_35_24000/model.pt'#'model.pt'#'other.pt' 
 model = torch.load(name)
 
 
@@ -195,11 +196,12 @@ def search_tile(file_path, prob_lim):
     search_loader = torch.utils.data.DataLoader(dataset=search_dataset, batch_size=1, num_workers=num_workers, shuffle=True)
     
     positives = np.zeros((1,4,45,45))
+    data_results = np.zeros((1, 2))
     columns = ['COADD_OBJECT_ID']
     positive_ids = pd.DataFrame(columns=columns)
     
     for i_batch, sample in enumerate(tqdm(search_loader)):
-        #if(i_batch==50): break
+        if(i_batch==50): break
         sample_image, sample_label, sample_img, sample_data = sample['image'], sample['label'] , sample['img'], sample['data']
         
         output = model(sample_image)
@@ -222,6 +224,7 @@ def search_tile(file_path, prob_lim):
         print('Found {} single lenses in this tile.'.format(len(positive_ids)))
         primary = fits.PrimaryHDU()
         image = fits.ImageHDU(positives, name="IMAGE")
+        data_results = Table.from_pandas(new_df)
         hdu_list = fits.HDUList([primary, image])
         hdu_list.writeto('Y6_detections/' + filename[:-5] + '.fits', overwrite=True)
         positive_ids.to_csv('Y6_detections/' + filename[:-5] + '_ids.csv')
@@ -232,6 +235,6 @@ def search_tile(file_path, prob_lim):
 
 prob_lim = 0.95
 print(filename)
-mem_usage = memory_usage(( search_tile, (file_path, prob_lim )))
+mem_usage = memory_usage((search_tile, (file_path, prob_lim )))
 print('Maximum memory usage: %s' % max(mem_usage))
 

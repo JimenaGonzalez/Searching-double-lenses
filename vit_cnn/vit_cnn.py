@@ -160,16 +160,15 @@ def make_train_test_datasets(images, data, labels, test_size=0.2, transform=None
 
 seed_everything(101)
 
-num_pos, num_neg = 40, 20
-num_workers = 8
-num_epochs = 2
+num_pos, num_neg = 12000, 6000
+num_workers = 16
+num_epochs = 6
 script = True
 
 
 hdu_list = fits.open('35.fits')
 idx = random.sample(range(len(hdu_list[1].data)), num_pos)
 images_pos = hdu_list[1].data[idx,:] 
-print(images_pos.shape)
 data_pos = pd.DataFrame(hdu_list[2].data[:][idx])
 labels_pos = np.zeros(num_pos, dtype = np.int64)
 
@@ -178,7 +177,6 @@ idx = random.sample(range(len(hdu_list[1].data)), num_neg)
 images_neg1 = hdu_list[1].data[idx,:] 
 images_neg1 = images_neg1[:,0:3,:,:]
 labels_neg1 = np.ones(num_neg, dtype = np.int64)
-print(images_neg1.shape)
 #Data for negatives, all null
 num_columns = len(data_pos.columns)
 data_neg1 = np.full((num_neg, num_columns-1), 0)
@@ -191,7 +189,6 @@ idx = random.sample(range(len(hdu_list[1].data)), num_neg)
 images_neg2 = hdu_list[1].data[idx,:] 
 images_neg2 = images_neg2[:,0:3,:,:]
 labels_neg2 = np.ones(num_neg, dtype = np.int64)
-print(images_neg2.shape)
 #Data for negatives, all null
 data_neg2 = data_neg1
 
@@ -222,6 +219,7 @@ print('Len train dataset: {}, len test dataset: {}'.format(len(train_dataset), l
 train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=20, num_workers=num_workers, shuffle=True)
 valid_loader = torch.utils.data.DataLoader(dataset=valid_dataset, batch_size=20, num_workers=num_workers, shuffle=True)
 test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=1, num_workers=num_workers, shuffle=True)
+torch.save(test_loader, 'test_loader.pth')
 
 
 # In[8]:
@@ -388,13 +386,6 @@ def fit_tpu(model, name_model, epochs, device, criterion, optimizer, train_loade
                 setattr(model, 'validation_acc', valid_accs)
                 torch.save(model, name_model)
                 best_val_acc = valid_acc
-    """
-    return {
-        "train_loss": train_losses,
-        "valid_losses": valid_losses,
-        "train_acc": train_accs,
-        "valid_acc": valid_accs,
-    }"""
 
 
 # In[12]:
@@ -429,35 +420,35 @@ def plot_performance(cnn):
     
 
 
-# In[ ]:
+# In[13]:
 
 
-name_model = 'other.pt'
+name_model = 'model.pt'
 #                          model, name_model, epochs, device, criterion, optimizer, train_loader, valid_loader=None
 mem_usage = memory_usage(( fit_tpu, (model, name_model, num_epochs, device, criterion, optimizer, train_loader, valid_loader)))
 
 
-# In[ ]:
+# In[14]:
 
 
 print('Maximum memory usage: %s' % max(mem_usage))
 
 
-# In[ ]:
+# In[15]:
 
 
-name = 'other.pt'#'model.pt'#'other.pt' 
+name = 'model.pt'#'model.pt'#'other.pt' 
 model = torch.load(name)
 print('Maximum validation accuracy: {:.2f}%'.format(100*model.validation_acc[-1].item()))
 
 
-# In[ ]:
+# In[16]:
 
 
 plot_performance(model)
 
 
-# In[ ]:
+# In[17]:
 
 
 def testing_analysis(prob_lim, test_loader):
@@ -470,7 +461,7 @@ def testing_analysis(prob_lim, test_loader):
 
     for i_batch, sample in enumerate(tqdm(test_loader)):
         sample_image, sample_label, sample_img, sample_data = sample['image'], sample['label'] , sample['img'], sample['data']
-    
+        
         #if(i_batch <= 50): continue
         output = model(sample_image)
         predicted = output.argmax(dim=1).item()
@@ -514,17 +505,19 @@ def testing_analysis(prob_lim, test_loader):
     return(images, data, rates, prob_list)
 
 
-# In[ ]:
+# In[18]:
 
 
 prob_lim = 0.95
+names = ['zl/z1', 'm', 'iso', 'E', 'Magni 1', 'ID', 'Prob']
+test_loader = torch.load('test_loader.pth')
 images, data, rates, prob_list = testing_analysis(prob_lim, test_loader)
 right_pos_img, wrong_pos_img, right_neg_img, wrong_neg_img = images[0], images[1], images[2], images[3]
 right_pos, wrong_pos, right_neg, wrong_neg = data[0], data[1], data[2], data[3]
 FPR, TPR = rates[0], rates[1]
 
 
-# In[ ]:
+# In[19]:
 
 
 def prob_distribution(prob_list):
@@ -532,19 +525,19 @@ def prob_distribution(prob_list):
     plt.title('Probability labeled as Positive')
     plt.hist(prob_list, 100, color = "skyblue")
     if(script):
-        plt.savefig('Prob_Pos Distribution.png', bbox_inches='tight')
+        plt.savefig('Prob_Pos_Distribution.png', bbox_inches='tight')
         plt.close()
     else: 
         plt.show()
 
 
-# In[ ]:
+# In[20]:
 
 
 prob_distribution(prob_list)
 
 
-# In[ ]:
+# In[21]:
 
 
 print('Right positives: ' + str(right_pos_img.shape))
@@ -560,7 +553,7 @@ print('Mean prob. right negatives: ' + str(np.mean(right_neg['Prob'])))
 print('Mean prob. wrong negatives: ' + str(np.mean(wrong_neg['Prob'])))
 
 
-# In[ ]:
+# In[22]:
 
 
 def make_plot_all(objects, title, prob_list):
@@ -584,31 +577,7 @@ def make_plot_all(objects, title, prob_list):
                 
 
 
-# In[ ]:
-
-
-make_plot_all(wrong_neg_img, 'Wrong negatives', wrong_neg['Prob'])
-
-
-# In[ ]:
-
-
-make_plot_all(wrong_pos_img, 'Wrong positives', wrong_pos['Prob'])
-
-
-# In[ ]:
-
-
-make_plot_all(right_pos_img, 'Right positives', right_pos['Prob'])
-
-
-# In[ ]:
-
-
-make_plot_all(right_neg_img, 'Right negatives', right_neg['Prob'])
-
-
-# In[ ]:
+# In[23]:
 
 
 def ROC_curve(num_points):
@@ -629,66 +598,165 @@ def ROC_curve(num_points):
         plt.show()
 
 
-# In[ ]:
+# In[24]:
 
 
-#ROC_curve(5)
+print('Wrong negatives')
+make_plot_all(wrong_neg_img, 'Wrong negatives', wrong_neg['Prob'])
+print('Wrong positives')
+make_plot_all(wrong_pos_img, 'Wrong positives', wrong_pos['Prob'])
+print('Right positives')
+make_plot_all(right_pos_img, 'Right positives', right_pos['Prob'])
+print('Right negatives')
+make_plot_all(right_neg_img, 'Right negatives', right_neg['Prob'])
 
 
-# In[ ]:
+# In[25]:
 
 
-"""
-path = '/Users/jimenagonzalez/research/DSPL/Searching-double-lenses/vit_cnn/Y6_catalog_files/'
-filename = 'DES0456-2458.fits'
-hdu_list = fits.open(path + filename)
-search_ids = pd.DataFrame(hdu_list[1].data)
-search_images = hdu_list[2].data
-search_images.dtype = np.float16
-search_labels = 2*np.ones(len(search_ids), dtype = np.int64)
+def make_histo(name):
+    plt.figure(figsize=(16,5)) 
 
-search_dataset = ImageDataset(search_images, search_ids, search_labels, transform=transform)
-search_loader = torch.utils.data.DataLoader(dataset=search_dataset, batch_size=1, num_workers=num_workers, shuffle=True)
-"""
+    plt.subplot(1,2,1)
+    plt.title('All distribution: ' + str(name))
+    data_all = np.concatenate((right_pos[name], wrong_pos[name]))
+    weights = np.ones_like(data_all) / len(data_all)
+    plt.hist(data_all, 30, weights = weights, edgecolor = 'black')
 
-
-# In[ ]:
-
-
-def search_tile(search_loader, prob_lim):
-    positives = np.zeros((1,4,46,46))
-    columns = ['COADD_OBJECT_ID']
-    positive_ids = pd.DataFrame(columns=columns)
+    plt.subplot(1,2,2)
+    plt.title(name)
+    weights = np.ones_like(right_pos[name]) / len(right_pos[name])
+    plt.hist(right_pos[name], 30, weights = weights, color = 'coral', alpha = 0.6, edgecolor = 'black', label='right')
+    weights = np.ones_like(wrong_pos[name]) / len(wrong_pos[name])
+    plt.hist(wrong_pos[name], 30, weights = weights, color = 'royalblue', alpha = 0.6, edgecolor = 'black', label='wrong')
+    plt.legend()
     
-    for i_batch, sample in enumerate(tqdm(search_loader)):
-        #if(i_batch==5000): break
-        sample_image, sample_label, sample_img, sample_data = sample['image'], sample['label'] , sample['img'], sample['data']
+    if(script):
+        plt.savefig('Histogram_' + str(name), bbox_inches='tight')
+        plt.close()
+    else:
+        plt.show()
         
-        output = model(sample_image)
-        predicted = output.argmax(dim=1).item()
+def make_all_histos():
+    for name in names:
+        if(name == 'ID'): continue
+        make_histo(name)
+
+
+# In[26]:
+
+
+def make_prob_vs(name):
+    plt.figure(figsize=(14,6)) 
+    plt.title(name)
+    plt.xlabel('Prob labeled as Single')
+    plt.ylabel(name)
+    plt.plot(right_pos['Prob'], right_pos[name], 'o', color = 'skyblue', label='wrong')
+    plt.plot(wrong_pos['Prob'], wrong_pos[name], 'o', color = 'violet', label='right')
+    plt.legend()
+
+    if(script):
+        plt.savefig('Prob_vs_' + str(name), bbox_inches='tight')
+        plt.close()
+    else:
+        plt.show()
+        
+def make_all_prob_vs():
+    for name in names:
+        if(name == 'ID' or name == 'Prob'): continue
+        make_prob_vs(name)
+
+
+# In[27]:
+
+
+def make_plots_correlation():
     
-        prob = nn.Softmax(dim=1)(output)
-        prob = prob[:,0].detach().numpy()[0]
-    
-        predicted = 0 if prob >= prob_lim else 1
-    
-        if(predicted == 0):
-            print('Positive!')
-            positives = np.append(positives, [np.array(sample_img[0])], axis = 0)
-            positive_ids = positive_ids.append(pd.DataFrame.from_dict(sample_data), ignore_index=True)
-    
-    positives = np.delete(positives, 0, axis = 0)
-    return(positives, positive_ids)
+    plt.figure(figsize=(16,25)) 
+
+    plt.subplot(4,2,1)
+    plt.xlabel(names[0])
+    plt.ylabel(names[1])
+    plt.scatter(right_pos[names[0]], right_pos[names[1]], color = 'blueviolet', alpha = 0.6, label ='Right')
+    plt.scatter(wrong_pos[names[0]], wrong_pos[names[1]], color = 'cyan', alpha = 0.7, label = 'Wrong')
+    plt.legend()
+
+    plt.subplot(4,2,2)
+    plt.xlabel(names[0])
+    plt.ylabel(names[2])
+    plt.scatter(right_pos[names[0]], right_pos[names[2]], color = 'blueviolet', alpha = 0.6, label ='Right')
+    plt.scatter(wrong_pos[names[0]], wrong_pos[names[2]], color = 'cyan', alpha = 0.7, label = 'Wrong')
+    plt.legend()
+
+    plt.subplot(4,2,3)
+    plt.xlabel(names[1])
+    plt.ylabel(names[2])
+    plt.scatter(right_pos[names[1]], right_pos[names[2]], color = 'blueviolet', alpha = 0.6, label ='Right')
+    plt.scatter(wrong_pos[names[1]], wrong_pos[names[2]], color = 'cyan', alpha = 0.7, label = 'Wrong')
+    plt.legend()
+
+    plt.subplot(4,2,4)
+    plt.xlabel(names[1])
+    plt.ylabel(names[3])
+    plt.scatter(right_pos[names[1]], right_pos[names[3]], color = 'blueviolet', alpha = 0.6, label ='Right')
+    plt.scatter(wrong_pos[names[1]], wrong_pos[names[3]], color = 'cyan', alpha = 0.7, label = 'Wrong')
+    plt.legend()
+
+    plt.subplot(4,2,5)
+    plt.xlabel(names[1])
+    plt.ylabel(names[4])
+    plt.scatter(right_pos[names[1]], right_pos[names[4]], color = 'blueviolet', alpha = 0.6, label ='Right')
+    plt.scatter(wrong_pos[names[1]], wrong_pos[names[4]], color = 'cyan', alpha = 0.7, label = 'Wrong')
+    plt.legend()
+
+    plt.subplot(4,2,6)
+    plt.xlabel(names[2])
+    plt.ylabel(names[3])
+    plt.scatter(right_pos[names[2]], right_pos[names[3]], color = 'blueviolet', alpha = 0.6, label ='Right')
+    plt.scatter(wrong_pos[names[2]], wrong_pos[names[3]], color = 'cyan', alpha = 0.7, label = 'Wrong')
+    plt.legend()
+
+    plt.subplot(4,2,7)
+    plt.xlabel(names[2])
+    plt.ylabel(names[4])
+    plt.scatter(right_pos[names[2]], right_pos[names[4]], color = 'blueviolet', alpha = 0.6, label ='Right')
+    plt.scatter(wrong_pos[names[2]], wrong_pos[names[4]], color = 'cyan', alpha = 0.7, label = 'Wrong')
+    plt.legend()
+
+    plt.subplot(4,2,8)
+    plt.xlabel(names[3])
+    plt.ylabel(names[4])
+    plt.scatter(right_pos[names[3]], right_pos[names[4]], color = 'blueviolet', alpha = 0.6, label ='Right')
+    plt.scatter(wrong_pos[names[3]], wrong_pos[names[4]], color = 'cyan', alpha = 0.7, label = 'Wrong')
+    plt.legend()
+
+    if(script):
+        plt.savefig('Plots_correlation', bbox_inches='tight')
+        plt.close()
+    else:
+        plt.show()
 
 
-# In[ ]:
+# In[28]:
 
 
-#positives, positive_ids = search_tile(search_loader, prob_lim)
+make_all_histos()
 
 
-# In[ ]:
+# In[29]:
 
 
-#positive_ids.to_csv(filename[:-5] + '_pos.fit')
+make_all_prob_vs()
+
+
+# In[30]:
+
+
+make_plots_correlation()
+
+
+# In[31]:
+
+
+ROC_curve(30)
 
