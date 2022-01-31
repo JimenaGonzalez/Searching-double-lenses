@@ -160,9 +160,9 @@ def make_train_test_datasets(images, data, labels, test_size=0.2, transform=None
 
 seed_everything(101)
 
-num_pos, num_neg = 12000, 6000
+num_pos, num_neg = 40, 20
 num_workers = 16
-num_epochs = 6
+num_epochs = 1
 script = True
 
 
@@ -219,7 +219,7 @@ print('Len train dataset: {}, len test dataset: {}'.format(len(train_dataset), l
 train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=20, num_workers=num_workers, shuffle=True)
 valid_loader = torch.utils.data.DataLoader(dataset=valid_dataset, batch_size=20, num_workers=num_workers, shuffle=True)
 test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=1, num_workers=num_workers, shuffle=True)
-torch.save(test_loader, 'test_loader.pth')
+#torch.save(test_loader, 'test_loader.pth')
 
 
 # In[8]:
@@ -423,21 +423,21 @@ def plot_performance(cnn):
 # In[13]:
 
 
-name_model = 'model.pt'
+name_model = 'other.pt'
 #                          model, name_model, epochs, device, criterion, optimizer, train_loader, valid_loader=None
-mem_usage = memory_usage(( fit_tpu, (model, name_model, num_epochs, device, criterion, optimizer, train_loader, valid_loader)))
+#mem_usage = memory_usage(( fit_tpu, (model, name_model, num_epochs, device, criterion, optimizer, train_loader, valid_loader)))
 
 
 # In[14]:
 
 
-print('Maximum memory usage: %s' % max(mem_usage))
+#print('Maximum memory usage: %s' % max(mem_usage))
 
 
 # In[15]:
 
 
-name = 'model.pt'#'model.pt'#'other.pt' 
+name = 'exp_35_24000/model.pt'#'model.pt'#'other.pt' 
 model = torch.load(name)
 print('Maximum validation accuracy: {:.2f}%'.format(100*model.validation_acc[-1].item()))
 
@@ -445,7 +445,7 @@ print('Maximum validation accuracy: {:.2f}%'.format(100*model.validation_acc[-1]
 # In[16]:
 
 
-plot_performance(model)
+#plot_performance(model)
 
 
 # In[17]:
@@ -510,7 +510,8 @@ def testing_analysis(prob_lim, test_loader):
 
 prob_lim = 0.95
 names = ['zl/z1', 'm', 'iso', 'E', 'Magni 1', 'ID', 'Prob']
-test_loader = torch.load('test_loader.pth')
+test_loader = torch.load('exp_36_24000/test_loader.pth')
+#if(script == False): test_loader.num_workers = 0
 images, data, rates, prob_list = testing_analysis(prob_lim, test_loader)
 right_pos_img, wrong_pos_img, right_neg_img, wrong_neg_img = images[0], images[1], images[2], images[3]
 right_pos, wrong_pos, right_neg, wrong_neg = data[0], data[1], data[2], data[3]
@@ -525,7 +526,7 @@ def prob_distribution(prob_list):
     plt.title('Probability labeled as Positive')
     plt.hist(prob_list, 100, color = "skyblue")
     if(script):
-        plt.savefig('Prob_Pos_Distribution.png', bbox_inches='tight')
+        plt.savefig('Prob_Pos Distribution.png', bbox_inches='tight')
         plt.close()
     else: 
         plt.show()
@@ -534,7 +535,7 @@ def prob_distribution(prob_list):
 # In[20]:
 
 
-prob_distribution(prob_list)
+#prob_distribution(prob_list)
 
 
 # In[21]:
@@ -590,7 +591,9 @@ def ROC_curve(num_points):
         TPR_list.append(TPR)
         print(prob, FPR, TPR)
     plt.figure(figsize=(6,6))
-    plt.plot(FPR_list, TPR_list, 'o')
+    plt.plot(FPR_list, TPR_list)
+    plt.xlabel("False Positive Rate")
+    plt.ylabel("True Positive Rate")
     if(script):
         plt.savefig('ROC curve', bbox_inches='tight')
         plt.close()
@@ -601,6 +604,8 @@ def ROC_curve(num_points):
 # In[24]:
 
 
+#asdfads
+"""
 print('Wrong negatives')
 make_plot_all(wrong_neg_img, 'Wrong negatives', wrong_neg['Prob'])
 print('Wrong positives')
@@ -609,6 +614,7 @@ print('Right positives')
 make_plot_all(right_pos_img, 'Right positives', right_pos['Prob'])
 print('Right negatives')
 make_plot_all(right_neg_img, 'Right negatives', right_neg['Prob'])
+"""
 
 
 # In[25]:
@@ -740,23 +746,23 @@ def make_plots_correlation():
 # In[28]:
 
 
-make_all_histos()
+#make_all_histos()
 
 
 # In[29]:
 
 
-make_all_prob_vs()
+#make_all_prob_vs()
 
 
 # In[30]:
 
 
-make_plots_correlation()
+#make_plots_correlation()
 
 
 # In[31]:
 
 
-ROC_curve(30)
+ROC_curve(40)
 
