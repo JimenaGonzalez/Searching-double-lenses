@@ -160,13 +160,13 @@ def make_train_test_datasets(images, data, labels, test_size=0.2, transform=None
 
 seed_everything(101)
 
-num_pos, num_neg = 40, 20
+num_pos, num_neg = 12000, 6000
 num_workers = 16
 num_epochs = 1
 script = True
 
 
-hdu_list = fits.open('35.fits')
+hdu_list = fits.open('36.fits')
 idx = random.sample(range(len(hdu_list[1].data)), num_pos)
 images_pos = hdu_list[1].data[idx,:] 
 data_pos = pd.DataFrame(hdu_list[2].data[:][idx])
@@ -437,7 +437,7 @@ name_model = 'other.pt'
 # In[15]:
 
 
-name = 'exp_35_24000/model.pt'#'model.pt'#'other.pt' 
+name = 'exp_36_24000/model.pt'#'model.pt'#'other.pt' 
 model = torch.load(name)
 print('Maximum validation accuracy: {:.2f}%'.format(100*model.validation_acc[-1].item()))
 
