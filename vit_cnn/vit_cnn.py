@@ -4,6 +4,8 @@
 # In[1]:
 
 
+script = True
+
 import numpy as np
 import pandas as pd
 
@@ -26,9 +28,11 @@ from astropy.io import fits
 
 from skimage import io
 import matplotlib.pyplot as plt
-#If using script on terminal
-from tqdm import tqdm
-#from tqdm.notebook import tqdm
+
+if(script):
+    from tqdm import tqdm
+else: 
+    from tqdm.notebook import tqdm
 
 from astropy.visualization import make_lupton_rgb
 plt.style.use('dark_background')
@@ -160,37 +164,38 @@ def make_train_test_datasets(images, data, labels, test_size=0.2, transform=None
 
 seed_everything(101)
 
-num_pos, num_neg = 12000, 6000
+num_pos, num_neg1, num_neg2 = 10000, 6500, 3500 #12000, 6000
 num_workers = 16
-num_epochs = 1
-script = True
+num_epochs = 4
 
 
-hdu_list = fits.open('36.fits')
+hdu_list = fits.open('38.fits')
 idx = random.sample(range(len(hdu_list[1].data)), num_pos)
 images_pos = hdu_list[1].data[idx,:] 
 data_pos = pd.DataFrame(hdu_list[2].data[:][idx])
+data_pos = data_pos.astype({'zl/z1': float, 'm': float, 'iso': float, 'E': float, 'Magni 1': float})
 labels_pos = np.zeros(num_pos, dtype = np.int64)
 
 hdu_list = fits.open('negative_redmagic.fits')
-idx = random.sample(range(len(hdu_list[1].data)), num_neg)
+idx = random.sample(range(len(hdu_list[1].data)), num_neg1)
 images_neg1 = hdu_list[1].data[idx,:] 
 images_neg1 = images_neg1[:,0:3,:,:]
-labels_neg1 = np.ones(num_neg, dtype = np.int64)
+labels_neg1 = np.ones(num_neg1, dtype = np.int64)
 #Data for negatives, all null
 num_columns = len(data_pos.columns)
-data_neg1 = np.full((num_neg, num_columns-1), 0)
-data_neg1 = pd.DataFrame(data_neg1, columns=['zl/z1', 'm', 'iso', 'E', 'Magni 1'])
-last_column = ['NEG']*num_neg
-data_neg1['ID'] = last_column
+data_neg1 = np.full((num_neg1, num_columns), 0)
+data_neg1 = pd.DataFrame(data_neg1, columns=data_pos.columns)
+#data_neg1 = data_neg1.astype({'zl/z1': float, 'm': float, 'iso': float, 'E': float, 'Magni 1': float})
 
 hdu_list = fits.open('negative_othergalaxies.fits')
-idx = random.sample(range(len(hdu_list[1].data)), num_neg)
+idx = random.sample(range(len(hdu_list[1].data)), num_neg2)
 images_neg2 = hdu_list[1].data[idx,:] 
 images_neg2 = images_neg2[:,0:3,:,:]
-labels_neg2 = np.ones(num_neg, dtype = np.int64)
+labels_neg2 = np.ones(num_neg2, dtype = np.int64)
 #Data for negatives, all null
-data_neg2 = data_neg1
+data_neg2 = np.full((num_neg2, num_columns), 0)
+data_neg2 = pd.DataFrame(data_neg2, columns=data_pos.columns)
+#data_neg2 = data_neg2.astype({'zl/z1': float, 'm': float, 'iso': float, 'E': float, 'Magni 1': float})
 
 images_dataset = np.concatenate((images_pos, images_neg1, images_neg2)).astype(np.float32)
 data_dataset = pd.concat([data_pos, data_neg1, data_neg2], axis=0).reset_index(drop=True)
@@ -202,7 +207,6 @@ transform = transforms.Compose([
             transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
 
 print(images_dataset.shape)
-print(images_dataset.dtype)
 
 
 # In[6]:
@@ -219,7 +223,7 @@ print('Len train dataset: {}, len test dataset: {}'.format(len(train_dataset), l
 train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=20, num_workers=num_workers, shuffle=True)
 valid_loader = torch.utils.data.DataLoader(dataset=valid_dataset, batch_size=20, num_workers=num_workers, shuffle=True)
 test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=1, num_workers=num_workers, shuffle=True)
-#torch.save(test_loader, 'test_loader.pth')
+torch.save(test_loader, 'test_loader.pth')
 
 
 # In[8]:
@@ -423,21 +427,21 @@ def plot_performance(cnn):
 # In[13]:
 
 
-name_model = 'other.pt'
+name_model = 'model.pt'
 #                          model, name_model, epochs, device, criterion, optimizer, train_loader, valid_loader=None
-#mem_usage = memory_usage(( fit_tpu, (model, name_model, num_epochs, device, criterion, optimizer, train_loader, valid_loader)))
+mem_usage = memory_usage(( fit_tpu, (model, name_model, num_epochs, device, criterion, optimizer, train_loader, valid_loader)))
 
 
 # In[14]:
 
 
-#print('Maximum memory usage: %s' % max(mem_usage))
+print('Maximum memory usage: %s' % max(mem_usage))
 
 
 # In[15]:
 
 
-name = 'exp_36_24000/model.pt'#'model.pt'#'other.pt' 
+name = 'model.pt'#'model.pt'#'other.pt' 
 model = torch.load(name)
 print('Maximum validation accuracy: {:.2f}%'.format(100*model.validation_acc[-1].item()))
 
@@ -445,7 +449,7 @@ print('Maximum validation accuracy: {:.2f}%'.format(100*model.validation_acc[-1]
 # In[16]:
 
 
-#plot_performance(model)
+plot_performance(model)
 
 
 # In[17]:
@@ -462,7 +466,6 @@ def testing_analysis(prob_lim, test_loader):
     for i_batch, sample in enumerate(tqdm(test_loader)):
         sample_image, sample_label, sample_img, sample_data = sample['image'], sample['label'] , sample['img'], sample['data']
         
-        #if(i_batch <= 50): continue
         output = model(sample_image)
         predicted = output.argmax(dim=1).item()
         my_df = pd.DataFrame.from_dict(sample_data)
@@ -508,10 +511,10 @@ def testing_analysis(prob_lim, test_loader):
 # In[18]:
 
 
-prob_lim = 0.95
+prob_lim = 0.5
 names = ['zl/z1', 'm', 'iso', 'E', 'Magni 1', 'ID', 'Prob']
-test_loader = torch.load('exp_36_24000/test_loader.pth')
-#if(script == False): test_loader.num_workers = 0
+test_loader = torch.load('test_loader.pth') #'exp_36_24000/test_loader.pth'
+if(script == False): test_loader.num_workers = 0
 images, data, rates, prob_list = testing_analysis(prob_lim, test_loader)
 right_pos_img, wrong_pos_img, right_neg_img, wrong_neg_img = images[0], images[1], images[2], images[3]
 right_pos, wrong_pos, right_neg, wrong_neg = data[0], data[1], data[2], data[3]
@@ -535,7 +538,7 @@ def prob_distribution(prob_list):
 # In[20]:
 
 
-#prob_distribution(prob_list)
+prob_distribution(prob_list)
 
 
 # In[21]:
@@ -557,7 +560,7 @@ print('Mean prob. wrong negatives: ' + str(np.mean(wrong_neg['Prob'])))
 # In[22]:
 
 
-def make_plot_all(objects, title, prob_list):
+def make_plot_all(objects, title, data):
     #print(title)
     for i in range(len(objects)):
         if(i%4 == 0):
@@ -565,7 +568,7 @@ def make_plot_all(objects, title, prob_list):
             for j in range(4):
                 if(i+j > len(objects)-1): break
                 plt.subplot(1,4,j+1)
-                plt.title(prob_list[i+j])
+                plt.title(data['E'][i+j])
                 rgb = make_lupton_rgb(objects[i+j][2], objects[i+j][1], objects[i+j][0], Q=11., stretch=40.)
                 plt.imshow(rgb, aspect='equal')
                 plt.xticks([], [])
@@ -604,17 +607,14 @@ def ROC_curve(num_points):
 # In[24]:
 
 
-#asdfads
-"""
 print('Wrong negatives')
-make_plot_all(wrong_neg_img, 'Wrong negatives', wrong_neg['Prob'])
+make_plot_all(wrong_neg_img, 'Wrong negatives', wrong_neg)
 print('Wrong positives')
-make_plot_all(wrong_pos_img, 'Wrong positives', wrong_pos['Prob'])
+make_plot_all(wrong_pos_img, 'Wrong positives', wrong_pos)
 print('Right positives')
-make_plot_all(right_pos_img, 'Right positives', right_pos['Prob'])
+make_plot_all(right_pos_img, 'Right positives', right_pos)
 print('Right negatives')
-make_plot_all(right_neg_img, 'Right negatives', right_neg['Prob'])
-"""
+make_plot_all(right_neg_img, 'Right negatives', right_neg)
 
 
 # In[25]:
@@ -638,6 +638,7 @@ def make_histo(name):
     plt.legend()
     
     if(script):
+        if(name == 'zl/z1'): name = 'zl_z1'
         plt.savefig('Histogram_' + str(name), bbox_inches='tight')
         plt.close()
     else:
@@ -662,6 +663,7 @@ def make_prob_vs(name):
     plt.legend()
 
     if(script):
+        if(name == 'zl/z1'): name = 'zl_z1'
         plt.savefig('Prob_vs_' + str(name), bbox_inches='tight')
         plt.close()
     else:
@@ -746,23 +748,23 @@ def make_plots_correlation():
 # In[28]:
 
 
-#make_all_histos()
+make_all_histos()
 
 
 # In[29]:
 
 
-#make_all_prob_vs()
+make_all_prob_vs()
 
 
 # In[30]:
 
 
-#make_plots_correlation()
+make_plots_correlation()
 
 
 # In[31]:
 
 
-ROC_curve(40)
+#ROC_curve(5)
 
