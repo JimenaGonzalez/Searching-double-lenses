@@ -164,42 +164,119 @@ def make_train_test_datasets(images, data, labels, test_size=0.2, transform=None
 
 seed_everything(101)
 
-num_pos, num_neg1, num_neg2 = 10000, 6500, 3500 #12000, 6000
+#num_pos, num_neg1, num_neg2 = 50, 20, 20 #12000, 6000
+npos, nred, ngz2, nn10, nround, nmergers, nspirals, nellip, nothers, nrandom = 10420, 4000, 164, 199, 1000, 223, 2000, 2000, 1500, 2500
 num_workers = 16
-num_epochs = 4
+num_epochs = 5
 
 
-hdu_list = fits.open('38.fits')
-idx = random.sample(range(len(hdu_list[1].data)), num_pos)
+hdu_list = fits.open('Data/39.fits')
+idx = random.sample(range(len(hdu_list[1].data)), npos)
 images_pos = hdu_list[1].data[idx,:] 
 data_pos = pd.DataFrame(hdu_list[2].data[:][idx])
 data_pos = data_pos.astype({'zl/z1': float, 'm': float, 'iso': float, 'E': float, 'Magni 1': float})
-labels_pos = np.zeros(num_pos, dtype = np.int64)
+labels_pos = np.zeros(npos, dtype = np.int64)
+hdu_list.close()
 
-hdu_list = fits.open('negative_redmagic.fits')
-idx = random.sample(range(len(hdu_list[1].data)), num_neg1)
+hdu_list = fits.open('Data/negative_redmagic.fits')
+idx = random.sample(range(len(hdu_list[1].data)), nred)
 images_neg1 = hdu_list[1].data[idx,:] 
 images_neg1 = images_neg1[:,0:3,:,:]
-labels_neg1 = np.ones(num_neg1, dtype = np.int64)
+labels_neg1 = np.ones(nred, dtype = np.int64)
 #Data for negatives, all null
 num_columns = len(data_pos.columns)
-data_neg1 = np.full((num_neg1, num_columns), 0)
+data_neg1 = np.full((nred, num_columns), 0)
 data_neg1 = pd.DataFrame(data_neg1, columns=data_pos.columns)
 #data_neg1 = data_neg1.astype({'zl/z1': float, 'm': float, 'iso': float, 'E': float, 'Magni 1': float})
+hdu_list.close()
 
-hdu_list = fits.open('negative_othergalaxies.fits')
-idx = random.sample(range(len(hdu_list[1].data)), num_neg2)
+hdu_list = fits.open('Data/bar_gz2.fits')
+idx = random.sample(range(len(hdu_list[1].data)), ngz2)
 images_neg2 = hdu_list[1].data[idx,:] 
 images_neg2 = images_neg2[:,0:3,:,:]
-labels_neg2 = np.ones(num_neg2, dtype = np.int64)
+labels_neg2 = np.ones(ngz2, dtype = np.int64)
 #Data for negatives, all null
-data_neg2 = np.full((num_neg2, num_columns), 0)
+data_neg2 = np.full((ngz2, num_columns), 0)
 data_neg2 = pd.DataFrame(data_neg2, columns=data_pos.columns)
+hdu_list.close()
+
+hdu_list = fits.open('Data/bar_n10.fits')
+idx = random.sample(range(len(hdu_list[1].data)), nn10)
+images_neg3 = hdu_list[1].data[idx,:] 
+images_neg3 = images_neg3[:,0:3,:,:]
+labels_neg3 = np.ones(nn10, dtype = np.int64)
+#Data for negatives, all null
+data_neg3 = np.full((nn10, num_columns), 0)
+data_neg3 = pd.DataFrame(data_neg3, columns=data_pos.columns)
+hdu_list.close()
+
+hdu_list = fits.open('Data/round.fits')
+idx = random.sample(range(len(hdu_list[1].data)), nround)
+images_neg4 = hdu_list[1].data[idx,:] 
+images_neg4 = images_neg4[:,0:3,:,:]
+labels_neg4 = np.ones(nround, dtype = np.int64)
+#Data for negatives, all null
+data_neg4 = np.full((nround, num_columns), 0)
+data_neg4 = pd.DataFrame(data_neg4, columns=data_pos.columns)
+hdu_list.close()
+
+hdu_list = fits.open('Data/mergers.fits')
+idx = random.sample(range(len(hdu_list[1].data)), nmergers)
+images_neg5 = hdu_list[1].data[idx,:] 
+images_neg5 = images_neg5[:,0:3,:,:]
+labels_neg5 = np.ones(nmergers, dtype = np.int64)
+#Data for negatives, all null
+data_neg5 = np.full((nmergers, num_columns), 0)
+data_neg5 = pd.DataFrame(data_neg5, columns=data_pos.columns)
+hdu_list.close()
+
+hdu_list = fits.open('Data/des_spirals.fits')
+idx = random.sample(range(len(hdu_list[1].data)), nspirals)
+images_neg6 = hdu_list[1].data[idx,:] 
+images_neg6 = images_neg6[:,0:3,:,:]
+labels_neg6 = np.ones(nspirals, dtype = np.int64)
+#Data for negatives, all null
+data_neg6 = np.full((nspirals, num_columns), 0)
+data_neg6 = pd.DataFrame(data_neg6, columns=data_pos.columns)
+hdu_list.close()
+
+hdu_list = fits.open('Data/des_ellipticals.fits')
+idx = random.sample(range(len(hdu_list[1].data)), nellip)
+images_neg7 = hdu_list[1].data[idx,:] 
+images_neg7 = images_neg7[:,0:3,:,:]
+labels_neg7 = np.ones(nellip, dtype = np.int64)
+#Data for negatives, all null
+data_neg7 = np.full((nellip, num_columns), 0)
+data_neg7 = pd.DataFrame(data_neg7, columns=data_pos.columns)
+hdu_list.close()
+
+hdu_list = fits.open('Data/des_others.fits')
+idx = random.sample(range(len(hdu_list[1].data)), nothers)
+images_neg8 = hdu_list[1].data[idx,:] 
+images_neg8 = images_neg8[:,0:3,:,:]
+labels_neg8 = np.ones(nothers, dtype = np.int64)
+#Data for negatives, all null
+data_neg8 = np.full((nothers, num_columns), 0)
+data_neg8 = pd.DataFrame(data_neg8, columns=data_pos.columns)
+hdu_list.close()
+
+hdu_list = fits.open('Data/negative_othergalaxies.fits')
+idx = random.sample(range(len(hdu_list[1].data)), nrandom)
+images_neg9 = hdu_list[1].data[idx,:] 
+images_neg9 = images_neg9[:,0:3,:,:]
+labels_neg9 = np.ones(nrandom, dtype = np.int64)
+#Data for negatives, all null
+data_neg9 = np.full((nrandom, num_columns), 0)
+data_neg9 = pd.DataFrame(data_neg9, columns=data_pos.columns)
+hdu_list.close()
 #data_neg2 = data_neg2.astype({'zl/z1': float, 'm': float, 'iso': float, 'E': float, 'Magni 1': float})
 
-images_dataset = np.concatenate((images_pos, images_neg1, images_neg2)).astype(np.float32)
-data_dataset = pd.concat([data_pos, data_neg1, data_neg2], axis=0).reset_index(drop=True)
-labels_dataset = np.concatenate((labels_pos, labels_neg1, labels_neg2), dtype = np.int64)
+images_dataset = np.concatenate((images_pos, images_neg1, images_neg2, images_neg3, images_neg4, 
+                                 images_neg5, images_neg6, images_neg7, images_neg8, images_neg9)).astype(np.float32)
+data_dataset = pd.concat([data_pos, data_neg1, data_neg2, data_neg3, data_neg4, data_neg5, data_neg6,
+                         data_neg7, data_neg8, data_neg9], axis=0).reset_index(drop=True)
+labels_dataset = np.concatenate((labels_pos, labels_neg1, labels_neg2, labels_neg3, labels_neg4, labels_neg5,
+                                labels_neg6, labels_neg7, labels_neg8, labels_neg9), dtype = np.int64)
 
 transform = transforms.Compose([
             transforms.Resize((224, 224)),
@@ -435,7 +512,7 @@ mem_usage = memory_usage(( fit_tpu, (model, name_model, num_epochs, device, crit
 # In[14]:
 
 
-print('Maximum memory usage: %s' % max(mem_usage))
+#print('Maximum memory usage: %s' % max(mem_usage))
 
 
 # In[15]:
@@ -766,5 +843,5 @@ make_plots_correlation()
 # In[31]:
 
 
-#ROC_curve(5)
+ROC_curve(30)
 
