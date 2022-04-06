@@ -4,9 +4,13 @@
 # In[1]:
 
 
+script = False
+cluster = False
+
 import numpy as np
 import pandas as pd
 from memory_profiler import memory_usage
+import sys
 
 import torch
 import torch.nn as nn
@@ -24,38 +28,13 @@ from astropy.visualization import make_lupton_rgb
 import matplotlib.pyplot as plt
 plt.style.use('dark_background')
 
-
-#If using script on terminal
-from tqdm import tqdm
-#from tqdm.notebook import tqdm
+if(script): 
+    from tqdm import tqdm
+else:
+    from tqdm.notebook import tqdm
 
 
 # In[2]:
-
-
-num_workers = 16
-script = True
-filename = 'DES2359-6331.fits'
-#filename = input('Tile filename: ')
-if(not(script)): 
-    path = '/Users/jimenagonzalez/research/DSPL/Searching-double-lenses/vit_cnn/Y6_catalog_files/'
-else:
-    path = '/data/des81.b/data/stronglens/Y6_CUTOUT_IMAGES/'
-
-
-file_path = path + filename
-
-transform = transforms.Compose([
-            transforms.Resize((224, 224)),
-            transforms.ToTensor(),
-            transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
-
-model = timm.create_model("vit_base_patch16_224", pretrained=True)
-path = 'jx_vit_base_p16_224-80ecf9dd.pth'
-model.load_state_dict(torch.load(path))
-
-
-# In[3]:
 
 
 class ImageDataset(Dataset):
@@ -119,7 +98,7 @@ class ImageDataset(Dataset):
         plt.show()
 
 
-# In[4]:
+# In[3]:
 
 
 def make_train_test_datasets(images, data, labels, test_size=0.2, transform=None):
@@ -147,7 +126,7 @@ def make_train_test_datasets(images, data, labels, test_size=0.2, transform=None
             ImageDataset(test_images, test_data, test_labels, transform=transform))
 
 
-# In[5]:
+# In[4]:
 
 
 class ViTBase16(nn.Module):
@@ -168,23 +147,16 @@ class ViTBase16(nn.Module):
         return x
 
 
-# In[6]:
+# In[5]:
 
 
-model = ViTBase16(n_classes=2, pretrained=True)
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model.to(device)
-
-name = 'exp_35_24000/model.pt'#'model.pt'#'other.pt' 
-model = torch.load(name)
-
-
-# In[7]:
-
-
-def search_tile(file_path, prob_lim):
+def search_tile(filename, prob_lim):
+    file_path = path + filename
+    print(filename)
+    
     hdu_list = fits.open(file_path)
     search_ids = pd.DataFrame(hdu_list[1].data)
+    print(len(search_ids))
     search_labels = 2*np.ones(len(search_ids), dtype = np.int64)
    
     int_arr = hdu_list[2].data    # change 2->3 for PSFs 
@@ -196,12 +168,10 @@ def search_tile(file_path, prob_lim):
     search_loader = torch.utils.data.DataLoader(dataset=search_dataset, batch_size=1, num_workers=num_workers, shuffle=True)
     
     positives = np.zeros((1,4,45,45))
-    data_results = np.zeros((1, 2))
-    columns = ['COADD_OBJECT_ID']
-    positive_ids = pd.DataFrame(columns=columns)
+    data_df = pd.DataFrame()
     
     for i_batch, sample in enumerate(tqdm(search_loader)):
-        if(i_batch==50): break
+        #if(i_batch==5): break
         sample_image, sample_label, sample_img, sample_data = sample['image'], sample['label'] , sample['img'], sample['data']
         
         output = model(sample_image)
@@ -213,28 +183,58 @@ def search_tile(file_path, prob_lim):
         predicted = 0 if prob >= prob_lim else 1
     
         if(predicted == 0):
-            positives = np.append(positives, [np.array(sample_img[0])], axis = 0)
             new_df = pd.DataFrame.from_dict(sample_data)
             new_df['Prob'] = prob
-            positive_ids = positive_ids.append(new_df, ignore_index=True)
+            data_df = data_df.append(new_df, ignore_index=True)
+            positives = np.append(positives, [np.array(sample_img[0])], axis = 0)
     
     positives = np.delete(positives, 0, axis = 0)
     
-    if(len(positive_ids) > 0):
-        print('Found {} single lenses in this tile.'.format(len(positive_ids)))
+    if(len(positives) > 0):
+        print('Found {} single lenses in this tile.'.format(len(data_df)))
         primary = fits.PrimaryHDU()
         image = fits.ImageHDU(positives, name="IMAGE")
-        data_results = Table.from_pandas(new_df)
-        hdu_list = fits.HDUList([primary, image])
+        data_df = data_df.astype({'COADD_OBJECT_ID': int, 'Prob': float})
+        data_table = Table.from_pandas(data_df)
+        table = fits.BinTableHDU(data = data_table)
+        hdu_list = fits.HDUList([primary, image, table])
         hdu_list.writeto('Y6_detections/' + filename[:-5] + '.fits', overwrite=True)
-        positive_ids.to_csv('Y6_detections/' + filename[:-5] + '_ids.csv')
 
 
-# In[8]:
+# In[6]:
 
 
-prob_lim = 0.95
-print(filename)
-mem_usage = memory_usage((search_tile, (file_path, prob_lim )))
+if(not(cluster)): 
+    path = '/Users/jimenagonzalez/research/DSPL/Searching-double-lenses/vit_cnn/Y6_catalog_files/'
+    num_workers = 0
+else:
+    path = '/data/des81.b/data/stronglens/Y6_CUTOUT_IMAGES/'
+    num_workers = 16
+
+transform = transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.ToTensor(),
+            transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
+
+model = timm.create_model("vit_base_patch16_224", pretrained=True)
+path_model = 'jx_vit_base_p16_224-80ecf9dd.pth'
+model.load_state_dict(torch.load(path_model))
+
+model = ViTBase16(n_classes=2, pretrained=True)
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model.to(device)
+
+name = 'exp_39/model.pt'#'model.pt'#'other.pt' 
+model = torch.load(name)
+
+
+# In[7]:
+
+
+filename = 'DES2359-6331.fits'
+if(cluster):
+    filename = sys.argv[1]
+prob_lim = 0.9
+mem_usage = memory_usage((search_tile, (filename, prob_lim )))
 print('Maximum memory usage: %s' % max(mem_usage))
 

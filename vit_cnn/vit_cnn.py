@@ -5,6 +5,7 @@
 
 
 script = True
+cluster = True
 
 import numpy as np
 import pandas as pd
@@ -15,6 +16,10 @@ import torchvision.transforms as transforms
 from torch.utils.data import Dataset, DataLoader
 import timm
 
+import seaborn as sn
+from sklearn.metrics import roc_curve
+from sklearn.metrics import roc_auc_score
+from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import train_test_split
 
 from PIL import Image, ImageOps
@@ -162,15 +167,20 @@ def make_train_test_datasets(images, data, labels, test_size=0.2, transform=None
 # In[5]:
 
 
-seed_everything(101)
+seed_everything(9)
 
-#num_pos, num_neg1, num_neg2 = 50, 20, 20 #12000, 6000
-npos, nred, ngz2, nn10, nround, nmergers, nspirals, nellip, nothers, nrandom = 10420, 4000, 164, 199, 1000, 223, 2000, 2000, 1500, 2500
-num_workers = 16
-num_epochs = 5
+if(cluster):
+    path = '/data/des90.a/data/sgonzal/training_data/'
+else:
+    path = 'Data/'
+
+#10420, 4000, 164, 199, 1000, 223, 2000, 2000, 1500, 2500
+npos, nred, ngz2, nn10, nround, nmergers, nspirals, nellip, nothers, nrandom = 10, 10, 10, 10, 10, 10, 10, 10, 10, 10
+num_workers = 0
+num_epochs = 1
 
 
-hdu_list = fits.open('Data/39.fits')
+hdu_list = fits.open(path + '39.fits')
 idx = random.sample(range(len(hdu_list[1].data)), npos)
 images_pos = hdu_list[1].data[idx,:] 
 data_pos = pd.DataFrame(hdu_list[2].data[:][idx])
@@ -178,7 +188,7 @@ data_pos = data_pos.astype({'zl/z1': float, 'm': float, 'iso': float, 'E': float
 labels_pos = np.zeros(npos, dtype = np.int64)
 hdu_list.close()
 
-hdu_list = fits.open('Data/negative_redmagic.fits')
+hdu_list = fits.open(path + 'negative_redmagic.fits')
 idx = random.sample(range(len(hdu_list[1].data)), nred)
 images_neg1 = hdu_list[1].data[idx,:] 
 images_neg1 = images_neg1[:,0:3,:,:]
@@ -190,7 +200,7 @@ data_neg1 = pd.DataFrame(data_neg1, columns=data_pos.columns)
 #data_neg1 = data_neg1.astype({'zl/z1': float, 'm': float, 'iso': float, 'E': float, 'Magni 1': float})
 hdu_list.close()
 
-hdu_list = fits.open('Data/bar_gz2.fits')
+hdu_list = fits.open(path + 'bar_gz2.fits')
 idx = random.sample(range(len(hdu_list[1].data)), ngz2)
 images_neg2 = hdu_list[1].data[idx,:] 
 images_neg2 = images_neg2[:,0:3,:,:]
@@ -200,7 +210,7 @@ data_neg2 = np.full((ngz2, num_columns), 0)
 data_neg2 = pd.DataFrame(data_neg2, columns=data_pos.columns)
 hdu_list.close()
 
-hdu_list = fits.open('Data/bar_n10.fits')
+hdu_list = fits.open(path + 'bar_n10.fits')
 idx = random.sample(range(len(hdu_list[1].data)), nn10)
 images_neg3 = hdu_list[1].data[idx,:] 
 images_neg3 = images_neg3[:,0:3,:,:]
@@ -210,7 +220,7 @@ data_neg3 = np.full((nn10, num_columns), 0)
 data_neg3 = pd.DataFrame(data_neg3, columns=data_pos.columns)
 hdu_list.close()
 
-hdu_list = fits.open('Data/round.fits')
+hdu_list = fits.open(path + 'round.fits')
 idx = random.sample(range(len(hdu_list[1].data)), nround)
 images_neg4 = hdu_list[1].data[idx,:] 
 images_neg4 = images_neg4[:,0:3,:,:]
@@ -220,7 +230,7 @@ data_neg4 = np.full((nround, num_columns), 0)
 data_neg4 = pd.DataFrame(data_neg4, columns=data_pos.columns)
 hdu_list.close()
 
-hdu_list = fits.open('Data/mergers.fits')
+hdu_list = fits.open(path + 'mergers.fits')
 idx = random.sample(range(len(hdu_list[1].data)), nmergers)
 images_neg5 = hdu_list[1].data[idx,:] 
 images_neg5 = images_neg5[:,0:3,:,:]
@@ -230,7 +240,7 @@ data_neg5 = np.full((nmergers, num_columns), 0)
 data_neg5 = pd.DataFrame(data_neg5, columns=data_pos.columns)
 hdu_list.close()
 
-hdu_list = fits.open('Data/des_spirals.fits')
+hdu_list = fits.open(path + 'des_spirals.fits')
 idx = random.sample(range(len(hdu_list[1].data)), nspirals)
 images_neg6 = hdu_list[1].data[idx,:] 
 images_neg6 = images_neg6[:,0:3,:,:]
@@ -240,7 +250,7 @@ data_neg6 = np.full((nspirals, num_columns), 0)
 data_neg6 = pd.DataFrame(data_neg6, columns=data_pos.columns)
 hdu_list.close()
 
-hdu_list = fits.open('Data/des_ellipticals.fits')
+hdu_list = fits.open(path + 'des_ellipticals.fits')
 idx = random.sample(range(len(hdu_list[1].data)), nellip)
 images_neg7 = hdu_list[1].data[idx,:] 
 images_neg7 = images_neg7[:,0:3,:,:]
@@ -250,7 +260,7 @@ data_neg7 = np.full((nellip, num_columns), 0)
 data_neg7 = pd.DataFrame(data_neg7, columns=data_pos.columns)
 hdu_list.close()
 
-hdu_list = fits.open('Data/des_others.fits')
+hdu_list = fits.open(path + 'des_others.fits')
 idx = random.sample(range(len(hdu_list[1].data)), nothers)
 images_neg8 = hdu_list[1].data[idx,:] 
 images_neg8 = images_neg8[:,0:3,:,:]
@@ -260,7 +270,7 @@ data_neg8 = np.full((nothers, num_columns), 0)
 data_neg8 = pd.DataFrame(data_neg8, columns=data_pos.columns)
 hdu_list.close()
 
-hdu_list = fits.open('Data/negative_othergalaxies.fits')
+hdu_list = fits.open(path + 'negative_othergalaxies.fits')
 idx = random.sample(range(len(hdu_list[1].data)), nrandom)
 images_neg9 = hdu_list[1].data[idx,:] 
 images_neg9 = images_neg9[:,0:3,:,:]
@@ -415,7 +425,7 @@ model = ViTBase16(n_classes=2, pretrained=True)
 # Start training processes
 device = torch.device("cuda")
 
-criterion = nn.CrossEntropyLoss()
+criterion = nn.CrossEntropyLoss() #nn.CrossEntropyLoss() #nn.BCELoss()
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
 model.to(device)
@@ -487,7 +497,7 @@ def plot_performance(cnn):
     ax1.scatter(x, loss_valid, color = 'limegreen', alpha = 0.8,  label = 'Validation loss')
     ax1.legend()
     
-    ax2.set_title('Performance. Max: {:.4f}%'.format(cnn.validation_acc[-1].item()))
+    ax2.set_title('Performance. Max: {:.4f}%'.format(100*cnn.validation_acc[-1].item()))
     ax2.set_xlabel('Epoch')
     ax2.scatter(x, train_acc, color = 'skyblue', alpha = 0.8,  label = 'Training Accuracy')
     ax2.scatter(x, valid_acc, color = 'limegreen', alpha = 0.8,  label = 'Validation Accuracy')
@@ -501,21 +511,21 @@ def plot_performance(cnn):
     
 
 
-# In[13]:
+# In[ ]:
 
 
-name_model = 'model.pt'
+name_model = 'other.pt'
 #                          model, name_model, epochs, device, criterion, optimizer, train_loader, valid_loader=None
 mem_usage = memory_usage(( fit_tpu, (model, name_model, num_epochs, device, criterion, optimizer, train_loader, valid_loader)))
 
 
-# In[14]:
+# In[ ]:
 
 
-#print('Maximum memory usage: %s' % max(mem_usage))
+print('Maximum memory usage: %s' % max(mem_usage))
 
 
-# In[15]:
+# In[ ]:
 
 
 name = 'model.pt'#'model.pt'#'other.pt' 
@@ -523,20 +533,20 @@ model = torch.load(name)
 print('Maximum validation accuracy: {:.2f}%'.format(100*model.validation_acc[-1].item()))
 
 
-# In[16]:
+# In[ ]:
 
 
 plot_performance(model)
 
 
-# In[17]:
+# In[ ]:
 
 
 def testing_analysis(prob_lim, test_loader):
     right_pos_img, wrong_pos_img = np.zeros((1,3,45,45)), np.zeros((1,3,45,45))
     right_neg_img, wrong_neg_img = np.zeros((1,3,45,45)), np.zeros((1,3,45,45))
-    columns = ['zl/z1', 'm', 'iso', 'E', 'Magni 1', 'ID', 'Prob']
-    prob_list = []
+    columns = ['zl/z1', 'm', 'iso', 'E', 'Magni 1', 'ID', 'Prob', 'thetaE_rf']
+    prob_list, true_list, pred_list = [], [], []
     right_pos, wrong_pos = pd.DataFrame(columns=columns), pd.DataFrame(columns=columns)
     right_neg, wrong_neg = pd.DataFrame(columns=columns), pd.DataFrame(columns=columns)
 
@@ -549,9 +559,11 @@ def testing_analysis(prob_lim, test_loader):
     
         prob = nn.Softmax(dim=1)(output)
         prob = prob[:,0].detach().numpy()[0]
-        prob_list.append(prob)
-    
         predicted = 0 if prob >= prob_lim else 1
+        
+        prob_list.append(prob)
+        true_list.append(sample_label.item())
+        pred_list.append(predicted)
     
         new_df = pd.DataFrame.from_dict(sample_data)
         new_df['Prob'] = prob
@@ -581,60 +593,27 @@ def testing_analysis(prob_lim, test_loader):
     images = [right_pos_img, wrong_pos_img, right_neg_img, wrong_neg_img]
     data = [right_pos, wrong_pos, right_neg, wrong_neg]
     rates = [FPR, TPR]
+    lists = [prob_list, true_list, pred_list]
     
-    return(images, data, rates, prob_list)
+    return(images, data, rates, lists)
 
 
-# In[18]:
+# In[ ]:
 
 
 prob_lim = 0.5
-names = ['zl/z1', 'm', 'iso', 'E', 'Magni 1', 'ID', 'Prob']
+names = ['zl/z1', 'm', 'iso', 'E', 'Magni 1', 'ID', 'Prob', 'thetaE_rf']
 test_loader = torch.load('test_loader.pth') #'exp_36_24000/test_loader.pth'
 if(script == False): test_loader.num_workers = 0
-images, data, rates, prob_list = testing_analysis(prob_lim, test_loader)
+images, data, rates, lists = testing_analysis(prob_lim, test_loader)
 right_pos_img, wrong_pos_img, right_neg_img, wrong_neg_img = images[0], images[1], images[2], images[3]
 right_pos, wrong_pos, right_neg, wrong_neg = data[0], data[1], data[2], data[3]
 FPR, TPR = rates[0], rates[1]
+prob_list, true_list, pred_list = lists[0], lists[1], lists[2]
+conf_matrix = confusion_matrix(true_list, pred_list, labels = [0, 1])
 
 
-# In[19]:
-
-
-def prob_distribution(prob_list):
-    plt.figure(figsize=(10,6))
-    plt.title('Probability labeled as Positive')
-    plt.hist(prob_list, 100, color = "skyblue")
-    if(script):
-        plt.savefig('Prob_Pos Distribution.png', bbox_inches='tight')
-        plt.close()
-    else: 
-        plt.show()
-
-
-# In[20]:
-
-
-prob_distribution(prob_list)
-
-
-# In[21]:
-
-
-print('Right positives: ' + str(right_pos_img.shape))
-print('Wrong positives: ' + str(wrong_pos_img.shape))
-print('Right negatives: ' + str(right_neg_img.shape))
-print('Wrong negatives: ' + str(wrong_neg_img.shape))
-print('Accuracy: '+ str( 100*(len(right_pos_img)+len(right_neg_img)) /len(test_dataset)) + '%')
-print('True positive rate: ' + str(TPR) + '%')
-print('False positive rate: ' + str(FPR) + '%')
-print('Mean prob. right positives: ' + str(np.mean(right_pos['Prob'])))
-print('Mean prob. wrong positives: ' + str(np.mean(wrong_pos['Prob'])))
-print('Mean prob. right negatives: ' + str(np.mean(right_neg['Prob'])))
-print('Mean prob. wrong negatives: ' + str(np.mean(wrong_neg['Prob'])))
-
-
-# In[22]:
+# In[ ]:
 
 
 def make_plot_all(objects, title, data):
@@ -645,56 +624,99 @@ def make_plot_all(objects, title, data):
             for j in range(4):
                 if(i+j > len(objects)-1): break
                 plt.subplot(1,4,j+1)
-                plt.title(data['E'][i+j])
+                new_title = 'm: {:.1f}, E: {:.1f}'.format(data['m'][i+j], data['E'][i+j])
+                plt.title(new_title)
                 rgb = make_lupton_rgb(objects[i+j][2], objects[i+j][1], objects[i+j][0], Q=11., stretch=40.)
                 plt.imshow(rgb, aspect='equal')
                 plt.xticks([], [])
                 plt.yticks([], []) 
             if(script):
-                plt.savefig(title+'_'+str(i+j), bbox_inches='tight')
+                plt.savefig(title+'_'+ str(i+j) + 'png', bbox_inches='tight')
                 plt.close()
             else: 
                 plt.show()
-                
 
+def plot_confusion_matrix():
+    df_cm = pd.DataFrame(conf_matrix, index = [i for i in "01"],
+                  columns = [i for i in "01"])
+    plt.figure(figsize = (9,6))
+    plt.title('Confusion Matrix')
+    #sn.set(font_scale=1.4)
+    sn.heatmap(df_cm, cmap='magma', annot=True, linecolor='w', linewidths=.5, annot_kws={"size": 14})
+    if(script):
+        plt.savefig('Confusion_matrix.png', bbox_inches='tight')
+        plt.close()
+    else: 
+        plt.show()
 
-# In[23]:
-
-
+def prob_distribution(prob_list):
+    plt.figure(figsize=(10,6))
+    plt.title('Probability labeled as Positive')
+    plt.hist(prob_list, 100, color = "skyblue")
+    if(script):
+        plt.savefig('Prob_Pos Distribution.png', bbox_inches='tight')
+        plt.close()
+    else: 
+        plt.show()
+        
 def ROC_curve(num_points):
     prob_lim = np.linspace(0, 1., num_points)
+    df = pd.DataFrame()
+    df['Prob'] = prob_list
+    df['True'] = true_list
     FPR_list, TPR_list = [], []
-    for prob in prob_lim:
-        images, data, rates, prob_list = testing_analysis(prob, test_loader)
-        FPR, TPR = rates[0], rates[1]
+    print('Prob, FPR, TPR')
+    for i in range(len(prob_lim)):
+        df['Pred'] = [1]*len(true_list)
+        df.loc[df['Prob'] > prob_lim[i], 'Pred'] = 0
+        rp = df[(df['True'] == 0) & (df['Pred'] == df['True'])]
+        rn = df[(df['True'] == 1) & (df['Pred'] == df['True'])]
+        wp = df[(df['True'] == 0) & (df['Pred'] != df['True'])]
+        wn = df[(df['True'] == 1) & (df['Pred'] != df['True'])]
+        FPR = len(wn)/(len(wn) + len(rn))*100
+        TPR = len(rp)/(len(rp) + len(wp))*100
         FPR_list.append(FPR)
         TPR_list.append(TPR)
-        print(prob, FPR, TPR)
+        print('{:.2f}, {:.2f}, {:.2f}'.format(prob_lim[i], FPR, TPR))
+    
     plt.figure(figsize=(6,6))
-    plt.plot(FPR_list, TPR_list)
+    plt.title('ROC curve')
+    plt.plot(FPR_list, TPR_list, 'o')
     plt.xlabel("False Positive Rate")
     plt.ylabel("True Positive Rate")
     if(script):
-        plt.savefig('ROC curve', bbox_inches='tight')
+        plt.savefig('ROC_curve', bbox_inches='tight')
         plt.close()
     else:
         plt.show()
 
 
-# In[24]:
+# In[ ]:
 
 
-print('Wrong negatives')
-make_plot_all(wrong_neg_img, 'Wrong negatives', wrong_neg)
-print('Wrong positives')
-make_plot_all(wrong_pos_img, 'Wrong positives', wrong_pos)
-print('Right positives')
-make_plot_all(right_pos_img, 'Right positives', right_pos)
-print('Right negatives')
-make_plot_all(right_neg_img, 'Right negatives', right_neg)
+prob_distribution(prob_list)
+plot_confusion_matrix()
+ROC_curve(50)
 
 
-# In[25]:
+# In[ ]:
+
+
+print('Right positives: ' + str(right_pos_img.shape))
+print('Wrong positives: ' + str(wrong_pos_img.shape))
+print('Right negatives: ' + str(right_neg_img.shape))
+print('Wrong negatives: ' + str(wrong_neg_img.shape))
+print('Accuracy: {:.2f}%'.format( 100*(len(right_pos_img)+len(right_neg_img)) /len(test_dataset)) + '%')
+print('Area Under Curve: {:.3f}'.format(1-roc_auc_score(true_list, prob_list)))
+print('True positive rate: {:.2f}%'.format(TPR))
+print('False positive rate: {:.2f}%'.format(FPR))
+print('Mean prob. right positives: {:.3f}'.format(np.mean(right_pos['Prob'])))
+print('Mean prob. wrong positives: {:.3f}'.format(np.mean(wrong_pos['Prob'])))
+print('Mean prob. right negatives: {:.3f}'.format(np.mean(right_neg['Prob'])))
+print('Mean prob. wrong negatives: {:.3f}'.format(np.mean(wrong_neg['Prob'])))
+
+
+# In[ ]:
 
 
 def make_histo(name):
@@ -706,12 +728,14 @@ def make_histo(name):
     weights = np.ones_like(data_all) / len(data_all)
     plt.hist(data_all, 30, weights = weights, edgecolor = 'black')
 
+    nbins = 10 if name == 'Magni 1' else 30
+    
     plt.subplot(1,2,2)
     plt.title(name)
     weights = np.ones_like(right_pos[name]) / len(right_pos[name])
     plt.hist(right_pos[name], 30, weights = weights, color = 'coral', alpha = 0.6, edgecolor = 'black', label='right')
     weights = np.ones_like(wrong_pos[name]) / len(wrong_pos[name])
-    plt.hist(wrong_pos[name], 30, weights = weights, color = 'royalblue', alpha = 0.6, edgecolor = 'black', label='wrong')
+    plt.hist(wrong_pos[name], nbins, weights = weights, color = 'royalblue', alpha = 0.6, edgecolor = 'black', label='wrong')
     plt.legend()
     
     if(script):
@@ -727,7 +751,7 @@ def make_all_histos():
         make_histo(name)
 
 
-# In[26]:
+# In[ ]:
 
 
 def make_prob_vs(name):
@@ -735,8 +759,8 @@ def make_prob_vs(name):
     plt.title(name)
     plt.xlabel('Prob labeled as Single')
     plt.ylabel(name)
-    plt.plot(right_pos['Prob'], right_pos[name], 'o', color = 'skyblue', label='wrong')
-    plt.plot(wrong_pos['Prob'], wrong_pos[name], 'o', color = 'violet', label='right')
+    plt.plot(right_pos['Prob'], right_pos[name], 'o', color = 'skyblue', label='right')
+    plt.plot(wrong_pos['Prob'], wrong_pos[name], 'o', color = 'violet', label='wrong')
     plt.legend()
 
     if(script):
@@ -752,7 +776,7 @@ def make_all_prob_vs():
         make_prob_vs(name)
 
 
-# In[27]:
+# In[ ]:
 
 
 def make_plots_correlation():
@@ -822,26 +846,33 @@ def make_plots_correlation():
         plt.show()
 
 
-# In[28]:
+# In[ ]:
 
 
 make_all_histos()
 
 
-# In[29]:
+# In[ ]:
 
 
 make_all_prob_vs()
 
 
-# In[30]:
+# In[ ]:
 
 
 make_plots_correlation()
 
 
-# In[31]:
+# In[ ]:
 
 
-ROC_curve(30)
+print('Wrong negatives')
+make_plot_all(wrong_neg_img, 'Wrong negatives', wrong_neg)
+print('Wrong positives')
+make_plot_all(wrong_pos_img, 'Wrong positives', wrong_pos)
+print('Right positives')
+make_plot_all(right_pos_img, 'Right positives', right_pos)
+print('Right negatives')
+make_plot_all(right_neg_img, 'Right negatives', right_neg)
 
