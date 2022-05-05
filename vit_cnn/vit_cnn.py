@@ -4,8 +4,8 @@
 # In[1]:
 
 
-script = True
-cluster = True
+script = False
+cluster = False
 
 import numpy as np
 import pandas as pd
@@ -23,7 +23,7 @@ from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import train_test_split
 
 from PIL import Image, ImageOps
-from transformers import ViTFeatureExtractor, ViTForImageClassification
+#from transformers import ViTFeatureExtractor, ViTForImageClassification
 
 from memory_profiler import memory_usage
 import random
@@ -170,21 +170,23 @@ def make_train_test_datasets(images, data, labels, test_size=0.2, transform=None
 seed_everything(9)
 
 if(cluster):
-    path = '/data/des90.a/data/sgonzal/training_data/'
+    path = '/data/des90.a/data/sgonzal/training_data/' #DES cluster
+    path = '' #CHTC
 else:
-    path = 'Data/'
-
+    path = 'Data/' #local
+    
 #10420, 4000, 164, 199, 1000, 223, 2000, 2000, 1500, 2500
 npos, nred, ngz2, nn10, nround, nmergers, nspirals, nellip, nothers, nrandom = 10, 10, 10, 10, 10, 10, 10, 10, 10, 10
 num_workers = 0
 num_epochs = 1
 
 
-hdu_list = fits.open(path + '39.fits')
+hdu_list = fits.open(path + 'other.fits')
 idx = random.sample(range(len(hdu_list[1].data)), npos)
 images_pos = hdu_list[1].data[idx,:] 
 data_pos = pd.DataFrame(hdu_list[2].data[:][idx])
-data_pos = data_pos.astype({'zl/z1': float, 'm': float, 'iso': float, 'E': float, 'Magni 1': float})
+data_pos = data_pos.drop('TILENAME', axis=1)
+#data_pos = data_pos.astype({'zl/z1': float, 'm': float, 'iso': float, 'E': float, 'Magni 1': float})
 labels_pos = np.zeros(npos, dtype = np.int64)
 hdu_list.close()
 
@@ -299,12 +301,19 @@ print(images_dataset.shape)
 # In[6]:
 
 
+print(data_pos.columns)
+data_pos.dtypes
+
+
+# In[7]:
+
+
 train_dataset, other_dataset = make_train_test_datasets(images_dataset, data_dataset, labels_dataset, test_size=0.3, transform=transform)
 valid_dataset, test_dataset = make_train_test_datasets(other_dataset.images, other_dataset.data, other_dataset.labels, test_size=0.5, transform=transform)
 print('Len train dataset: {}, len test dataset: {}'.format(len(train_dataset), len(test_dataset)))
 
 
-# In[7]:
+# In[8]:
 
 
 train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=20, num_workers=num_workers, shuffle=True)
@@ -313,7 +322,7 @@ test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=1, nu
 torch.save(test_loader, 'test_loader.pth')
 
 
-# In[8]:
+# In[9]:
 
 
 model = timm.create_model("vit_base_patch16_224", pretrained=True)
@@ -321,7 +330,7 @@ path = 'jx_vit_base_p16_224-80ecf9dd.pth'
 model.load_state_dict(torch.load(path))
 
 
-# In[9]:
+# In[10]:
 
 
 class ViTBase16(nn.Module):
@@ -417,7 +426,7 @@ class ViTBase16(nn.Module):
         return valid_loss / len(valid_loader.dataset), valid_accuracy / len(valid_loader.dataset)
 
 
-# In[10]:
+# In[11]:
 
 
 model = ViTBase16(n_classes=2, pretrained=True)
@@ -434,7 +443,7 @@ learning_rate = 0.0001
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
 
-# In[11]:
+# In[12]:
 
 
 def fit_tpu(model, name_model, epochs, device, criterion, optimizer, train_loader, valid_loader=None):
@@ -479,7 +488,7 @@ def fit_tpu(model, name_model, epochs, device, criterion, optimizer, train_loade
                 best_val_acc = valid_acc
 
 
-# In[12]:
+# In[13]:
 
 
 def plot_performance(cnn):
@@ -511,7 +520,7 @@ def plot_performance(cnn):
     
 
 
-# In[ ]:
+# In[14]:
 
 
 name_model = 'other.pt'
@@ -519,33 +528,38 @@ name_model = 'other.pt'
 mem_usage = memory_usage(( fit_tpu, (model, name_model, num_epochs, device, criterion, optimizer, train_loader, valid_loader)))
 
 
-# In[ ]:
+# In[15]:
 
 
 print('Maximum memory usage: %s' % max(mem_usage))
 
 
-# In[ ]:
+# In[16]:
 
 
-name = 'model.pt'#'model.pt'#'other.pt' 
+name = 'other.pt'#'model.pt'#'other.pt' 
 model = torch.load(name)
 print('Maximum validation accuracy: {:.2f}%'.format(100*model.validation_acc[-1].item()))
 
 
-# In[ ]:
+# In[17]:
 
 
 plot_performance(model)
 
 
-# In[ ]:
+# In[18]:
 
 
 def testing_analysis(prob_lim, test_loader):
     right_pos_img, wrong_pos_img = np.zeros((1,3,45,45)), np.zeros((1,3,45,45))
     right_neg_img, wrong_neg_img = np.zeros((1,3,45,45)), np.zeros((1,3,45,45))
-    columns = ['zl/z1', 'm', 'iso', 'E', 'Magni 1', 'ID', 'Prob', 'thetaE_rf']
+    columns = ['Prob', 'Z_LENS', 'FLUX_RADIUS_G', 'FLUX_RADIUS_R',
+       'FLUX_RADIUS_I', 'FLUX_RADIUS_Z', 'MAG_APER_4_G', 'MAG_APER_8_G', 'LUM',
+       'FWHM_WMEAN_G', 'FWHM_WMEAN_R', 'FWHM_WMEAN_I', 'FWHM_WMEAN_Z',
+       'SKYBRITE_WMEAN_G', 'SKYBRITE_WMEAN_R', 'SKYBRITE_WMEAN_I',
+       'SKYBRITE_WMEAN_Z', 'Z1', 'LENSED_MAG', 'mag_1', 'ISOLATION',
+       'EINSTEIN_RADIUS', 'MAGNIFICATION']# COLUMNS + PROB
     prob_list, true_list, pred_list = [], [], []
     right_pos, wrong_pos = pd.DataFrame(columns=columns), pd.DataFrame(columns=columns)
     right_neg, wrong_neg = pd.DataFrame(columns=columns), pd.DataFrame(columns=columns)
@@ -598,11 +612,17 @@ def testing_analysis(prob_lim, test_loader):
     return(images, data, rates, lists)
 
 
-# In[ ]:
+# In[19]:
 
 
 prob_lim = 0.5
-names = ['zl/z1', 'm', 'iso', 'E', 'Magni 1', 'ID', 'Prob', 'thetaE_rf']
+
+names = ['Prob', 'Z_LENS', 'FLUX_RADIUS_G', 'FLUX_RADIUS_R',
+       'FLUX_RADIUS_I', 'FLUX_RADIUS_Z', 'MAG_APER_4_G', 'MAG_APER_8_G', 'LUM',
+       'FWHM_WMEAN_G', 'FWHM_WMEAN_R', 'FWHM_WMEAN_I', 'FWHM_WMEAN_Z',
+       'SKYBRITE_WMEAN_G', 'SKYBRITE_WMEAN_R', 'SKYBRITE_WMEAN_I',
+       'SKYBRITE_WMEAN_Z', 'Z1', 'LENSED_MAG', 'mag_1', 'ISOLATION',
+       'EINSTEIN_RADIUS', 'MAGNIFICATION']
 test_loader = torch.load('test_loader.pth') #'exp_36_24000/test_loader.pth'
 if(script == False): test_loader.num_workers = 0
 images, data, rates, lists = testing_analysis(prob_lim, test_loader)
@@ -611,9 +631,12 @@ right_pos, wrong_pos, right_neg, wrong_neg = data[0], data[1], data[2], data[3]
 FPR, TPR = rates[0], rates[1]
 prob_list, true_list, pred_list = lists[0], lists[1], lists[2]
 conf_matrix = confusion_matrix(true_list, pred_list, labels = [0, 1])
+if(cluster):
+    right_pos.to_csv('data_right_pos.csv')
+    wrong_pos.to_csv('data_wrong_pos.csv')
 
 
-# In[ ]:
+# In[20]:
 
 
 def make_plot_all(objects, title, data):
@@ -624,7 +647,7 @@ def make_plot_all(objects, title, data):
             for j in range(4):
                 if(i+j > len(objects)-1): break
                 plt.subplot(1,4,j+1)
-                new_title = 'm: {:.1f}, E: {:.1f}'.format(data['m'][i+j], data['E'][i+j])
+                new_title = 'Prob: {:.1f}'.format(data['Prob'][i+j])
                 plt.title(new_title)
                 rgb = make_lupton_rgb(objects[i+j][2], objects[i+j][1], objects[i+j][0], Q=11., stretch=40.)
                 plt.imshow(rgb, aspect='equal')
@@ -679,7 +702,7 @@ def ROC_curve(num_points):
         TPR_list.append(TPR)
         print('{:.2f}, {:.2f}, {:.2f}'.format(prob_lim[i], FPR, TPR))
     
-    plt.figure(figsize=(6,6))
+    plt.figure(figsize=(8,6))
     plt.title('ROC curve')
     plt.plot(FPR_list, TPR_list, 'o')
     plt.xlabel("False Positive Rate")
@@ -691,7 +714,7 @@ def ROC_curve(num_points):
         plt.show()
 
 
-# In[ ]:
+# In[21]:
 
 
 prob_distribution(prob_list)
@@ -699,7 +722,7 @@ plot_confusion_matrix()
 ROC_curve(50)
 
 
-# In[ ]:
+# In[22]:
 
 
 print('Right positives: ' + str(right_pos_img.shape))
@@ -716,7 +739,7 @@ print('Mean prob. right negatives: {:.3f}'.format(np.mean(right_neg['Prob'])))
 print('Mean prob. wrong negatives: {:.3f}'.format(np.mean(wrong_neg['Prob'])))
 
 
-# In[ ]:
+# In[23]:
 
 
 def make_histo(name):
@@ -726,20 +749,47 @@ def make_histo(name):
     plt.title('All distribution: ' + str(name))
     data_all = np.concatenate((right_pos[name], wrong_pos[name]))
     weights = np.ones_like(data_all) / len(data_all)
-    plt.hist(data_all, 30, weights = weights, edgecolor = 'black')
-
-    nbins = 10 if name == 'Magni 1' else 30
+    #plt.hist(data_all, 30, weights = weights, edgecolor = 'black')
+    plt.hist(data_all, density = True, bins = 'auto', edgecolor = 'black')
+    
+    #nbins = 10 if name == 'Magni 1' else 30
     
     plt.subplot(1,2,2)
     plt.title(name)
     weights = np.ones_like(right_pos[name]) / len(right_pos[name])
-    plt.hist(right_pos[name], 30, weights = weights, color = 'coral', alpha = 0.6, edgecolor = 'black', label='right')
+    #plt.hist(right_pos[name], weights = weights, bins = 'auto', color = 'coral', alpha = 0.6, edgecolor = 'black', label='right')
+    plt.hist(right_pos[name], density = True, bins = 'auto', color = 'coral', alpha = 0.6, edgecolor = 'black', label='right')
     weights = np.ones_like(wrong_pos[name]) / len(wrong_pos[name])
-    plt.hist(wrong_pos[name], nbins, weights = weights, color = 'royalblue', alpha = 0.6, edgecolor = 'black', label='wrong')
+    #plt.hist(wrong_pos[name], weights = weights, bins = 'auto', color = 'royalblue', alpha = 0.6, edgecolor = 'black', label='wrong')
+    plt.hist(wrong_pos[name], density = True, bins = 'auto', color = 'royalblue', alpha = 0.6, edgecolor = 'black', label='wrong')
     plt.legend()
     
     if(script):
-        if(name == 'zl/z1'): name = 'zl_z1'
+        plt.savefig('Histogram_' + str(name), bbox_inches='tight')
+        plt.close()
+    else:
+        plt.show()
+        
+def histo_ratio(name, var1, var2):
+    plt.figure(figsize=(16,5)) 
+
+    plt.subplot(1,2,1)
+    plt.title('All distribution: ' + var1 + '/' + var2)
+    data_all = np.concatenate((right_pos[var1]/right_pos[var2], wrong_pos[var1]/wrong_pos[var2]))
+    #weights = np.ones_like(data_all) / len(data_all)
+    plt.hist(data_all, bins = 'auto', edgecolor = 'black')
+
+    #nbins = 10 if name == 'Magni 1' else 30
+    
+    plt.subplot(1,2,2)
+    plt.title(var1 + '/' + var2)
+    weights = np.ones_like(right_pos[var1]) / len(right_pos[var1])
+    plt.hist(right_pos[var1]/right_pos[var2], bins = 'auto', color = 'coral', alpha = 0.6, edgecolor = 'black', label='right')
+    weights = np.ones_like(wrong_pos[var1]) / len(wrong_pos[var1])
+    plt.hist(wrong_pos[var1]/wrong_pos[var2], bins = 'auto', color = 'royalblue', alpha = 0.6, edgecolor = 'black', label='wrong')
+    plt.legend()
+    
+    if(script):
         plt.savefig('Histogram_' + str(name), bbox_inches='tight')
         plt.close()
     else:
@@ -747,11 +797,12 @@ def make_histo(name):
         
 def make_all_histos():
     for name in names:
-        if(name == 'ID'): continue
         make_histo(name)
+    histo_ratio('Z1_ZLENS', 'Z1', 'Z_LENS')
+    histo_ratio('E_FluxR', 'EINSTEIN_RADIUS', 'FLUX_RADIUS_G')
 
 
-# In[ ]:
+# In[24]:
 
 
 def make_prob_vs(name):
@@ -764,7 +815,6 @@ def make_prob_vs(name):
     plt.legend()
 
     if(script):
-        if(name == 'zl/z1'): name = 'zl_z1'
         plt.savefig('Prob_vs_' + str(name), bbox_inches='tight')
         plt.close()
     else:
@@ -772,73 +822,87 @@ def make_prob_vs(name):
         
 def make_all_prob_vs():
     for name in names:
-        if(name == 'ID' or name == 'Prob'): continue
+        if(name == 'Prob'): continue
         make_prob_vs(name)
 
 
-# In[ ]:
+# In[25]:
 
 
 def make_plots_correlation():
     
-    plt.figure(figsize=(16,25)) 
+    plt.figure(figsize=(16,30)) 
 
-    plt.subplot(4,2,1)
-    plt.xlabel(names[0])
-    plt.ylabel(names[1])
-    plt.scatter(right_pos[names[0]], right_pos[names[1]], color = 'blueviolet', alpha = 0.6, label ='Right')
-    plt.scatter(wrong_pos[names[0]], wrong_pos[names[1]], color = 'cyan', alpha = 0.7, label = 'Wrong')
-    plt.legend()
-
-    plt.subplot(4,2,2)
-    plt.xlabel(names[0])
-    plt.ylabel(names[2])
-    plt.scatter(right_pos[names[0]], right_pos[names[2]], color = 'blueviolet', alpha = 0.6, label ='Right')
-    plt.scatter(wrong_pos[names[0]], wrong_pos[names[2]], color = 'cyan', alpha = 0.7, label = 'Wrong')
-    plt.legend()
-
-    plt.subplot(4,2,3)
+    plt.subplot(5,2,1)
     plt.xlabel(names[1])
-    plt.ylabel(names[2])
-    plt.scatter(right_pos[names[1]], right_pos[names[2]], color = 'blueviolet', alpha = 0.6, label ='Right')
-    plt.scatter(wrong_pos[names[1]], wrong_pos[names[2]], color = 'cyan', alpha = 0.7, label = 'Wrong')
+    plt.ylabel(names[17])
+    plt.scatter(right_pos[names[1]], right_pos[names[17]], color = 'blueviolet', alpha = 0.6, label ='Right')
+    plt.scatter(wrong_pos[names[1]], wrong_pos[names[17]], color = 'cyan', alpha = 0.7, label = 'Wrong')
     plt.legend()
 
-    plt.subplot(4,2,4)
-    plt.xlabel(names[1])
-    plt.ylabel(names[3])
-    plt.scatter(right_pos[names[1]], right_pos[names[3]], color = 'blueviolet', alpha = 0.6, label ='Right')
-    plt.scatter(wrong_pos[names[1]], wrong_pos[names[3]], color = 'cyan', alpha = 0.7, label = 'Wrong')
+    plt.subplot(5,2,2)
+    plt.xlabel(names[22])
+    plt.ylabel(names[18])
+    plt.scatter(right_pos[names[22]], right_pos[names[18]], color = 'blueviolet', alpha = 0.6, label ='Right')
+    plt.scatter(wrong_pos[names[22]], wrong_pos[names[18]], color = 'cyan', alpha = 0.7, label = 'Wrong')
     plt.legend()
 
-    plt.subplot(4,2,5)
-    plt.xlabel(names[1])
-    plt.ylabel(names[4])
-    plt.scatter(right_pos[names[1]], right_pos[names[4]], color = 'blueviolet', alpha = 0.6, label ='Right')
-    plt.scatter(wrong_pos[names[1]], wrong_pos[names[4]], color = 'cyan', alpha = 0.7, label = 'Wrong')
+    plt.subplot(5,2,3)
+    plt.xlabel(names[22])
+    plt.ylabel(names[20])
+    plt.scatter(right_pos[names[22]], right_pos[names[20]], color = 'blueviolet', alpha = 0.6, label ='Right')
+    plt.scatter(wrong_pos[names[22]], wrong_pos[names[20]], color = 'cyan', alpha = 0.7, label = 'Wrong')
     plt.legend()
 
-    plt.subplot(4,2,6)
-    plt.xlabel(names[2])
-    plt.ylabel(names[3])
-    plt.scatter(right_pos[names[2]], right_pos[names[3]], color = 'blueviolet', alpha = 0.6, label ='Right')
-    plt.scatter(wrong_pos[names[2]], wrong_pos[names[3]], color = 'cyan', alpha = 0.7, label = 'Wrong')
+    plt.subplot(5,2,4)
+    plt.xlabel(names[22])
+    plt.ylabel(names[21])
+    plt.scatter(right_pos[names[22]], right_pos[names[21]], color = 'blueviolet', alpha = 0.6, label ='Right')
+    plt.scatter(wrong_pos[names[22]], wrong_pos[names[21]], color = 'cyan', alpha = 0.7, label = 'Wrong')
     plt.legend()
 
-    plt.subplot(4,2,7)
-    plt.xlabel(names[2])
-    plt.ylabel(names[4])
-    plt.scatter(right_pos[names[2]], right_pos[names[4]], color = 'blueviolet', alpha = 0.6, label ='Right')
-    plt.scatter(wrong_pos[names[2]], wrong_pos[names[4]], color = 'cyan', alpha = 0.7, label = 'Wrong')
+    plt.subplot(5,2,5)
+    plt.xlabel(names[20])
+    plt.ylabel(names[18])
+    plt.scatter(right_pos[names[20]], right_pos[names[18]], color = 'blueviolet', alpha = 0.6, label ='Right')
+    plt.scatter(wrong_pos[names[20]], wrong_pos[names[18]], color = 'cyan', alpha = 0.7, label = 'Wrong')
     plt.legend()
 
-    plt.subplot(4,2,8)
-    plt.xlabel(names[3])
-    plt.ylabel(names[4])
-    plt.scatter(right_pos[names[3]], right_pos[names[4]], color = 'blueviolet', alpha = 0.6, label ='Right')
-    plt.scatter(wrong_pos[names[3]], wrong_pos[names[4]], color = 'cyan', alpha = 0.7, label = 'Wrong')
+    plt.subplot(5,2,6)
+    plt.xlabel(names[20])
+    plt.ylabel(names[21])
+    plt.scatter(right_pos[names[20]], right_pos[names[21]], color = 'blueviolet', alpha = 0.6, label ='Right')
+    plt.scatter(wrong_pos[names[20]], wrong_pos[names[21]], color = 'cyan', alpha = 0.7, label = 'Wrong')
     plt.legend()
 
+    plt.subplot(5,2,7)
+    plt.xlabel(names[17] + '/' + names[1])
+    plt.ylabel(names[21] + '/' + names[2])
+    plt.scatter(right_pos[names[17]]/right_pos[names[1]], right_pos[names[21]]/right_pos[names[2]], color = 'blueviolet', alpha = 0.6, label ='Right')
+    plt.scatter(wrong_pos[names[17]]/wrong_pos[names[1]], wrong_pos[names[21]]/wrong_pos[names[2]], color = 'cyan', alpha = 0.7, label = 'Wrong')
+    plt.legend()
+
+    plt.subplot(5,2,8)
+    plt.xlabel(names[8])
+    plt.ylabel(names[21] + '/' + names[2])
+    plt.scatter(right_pos[names[8]], right_pos[names[21]]/right_pos[names[2]], color = 'blueviolet', alpha = 0.6, label ='Right')
+    plt.scatter(wrong_pos[names[8]], wrong_pos[names[21]]/right_pos[names[2]], color = 'cyan', alpha = 0.7, label = 'Wrong')
+    plt.legend()
+
+    plt.subplot(5,2,9)
+    plt.xlabel(names[9])
+    plt.ylabel(names[13])
+    plt.scatter(right_pos[names[9]], right_pos[names[13]], color = 'blueviolet', alpha = 0.6, label ='Right')
+    plt.scatter(wrong_pos[names[9]], wrong_pos[names[13]], color = 'cyan', alpha = 0.7, label = 'Wrong')
+    plt.legend()
+
+    plt.subplot(5,2,10)
+    plt.xlabel(names[13])
+    plt.ylabel(names[21] + '/' + names[2])
+    plt.scatter(right_pos[names[13]], right_pos[names[21]]/right_pos[names[2]], color = 'blueviolet', alpha = 0.6, label ='Right')
+    plt.scatter(wrong_pos[names[13]], wrong_pos[names[21]]/right_pos[names[2]], color = 'cyan', alpha = 0.7, label = 'Wrong')
+    plt.legend()
+    
     if(script):
         plt.savefig('Plots_correlation', bbox_inches='tight')
         plt.close()
@@ -846,25 +910,25 @@ def make_plots_correlation():
         plt.show()
 
 
-# In[ ]:
+# In[26]:
 
 
 make_all_histos()
 
 
-# In[ ]:
+# In[27]:
 
 
 make_all_prob_vs()
 
 
-# In[ ]:
+# In[28]:
 
 
 make_plots_correlation()
 
 
-# In[ ]:
+# In[29]:
 
 
 print('Wrong negatives')
