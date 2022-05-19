@@ -4,7 +4,7 @@
 # In[1]:
 
 
-script = False
+script = True
 cluster = False
 
 import numpy as np
@@ -181,7 +181,7 @@ num_workers = 0
 num_epochs = 1
 
 
-hdu_list = fits.open(path + 'other.fits')
+hdu_list = fits.open(path + '45.fits')
 idx = random.sample(range(len(hdu_list[1].data)), npos)
 images_pos = hdu_list[1].data[idx,:] 
 data_pos = pd.DataFrame(hdu_list[2].data[:][idx])
@@ -301,19 +301,12 @@ print(images_dataset.shape)
 # In[6]:
 
 
-print(data_pos.columns)
-data_pos.dtypes
-
-
-# In[7]:
-
-
 train_dataset, other_dataset = make_train_test_datasets(images_dataset, data_dataset, labels_dataset, test_size=0.3, transform=transform)
 valid_dataset, test_dataset = make_train_test_datasets(other_dataset.images, other_dataset.data, other_dataset.labels, test_size=0.5, transform=transform)
 print('Len train dataset: {}, len test dataset: {}'.format(len(train_dataset), len(test_dataset)))
 
 
-# In[8]:
+# In[7]:
 
 
 train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=20, num_workers=num_workers, shuffle=True)
@@ -322,15 +315,15 @@ test_loader = torch.utils.data.DataLoader(dataset=test_dataset, batch_size=1, nu
 torch.save(test_loader, 'test_loader.pth')
 
 
+# In[8]:
+
+
+#model = timm.create_model("vit_base_patch16_224", pretrained=True)
+#path = 'jx_vit_base_p16_224-80ecf9dd.pth'
+#model.load_state_dict(torch.load(path))
+
+
 # In[9]:
-
-
-model = timm.create_model("vit_base_patch16_224", pretrained=True)
-path = 'jx_vit_base_p16_224-80ecf9dd.pth'
-model.load_state_dict(torch.load(path))
-
-
-# In[10]:
 
 
 class ViTBase16(nn.Module):
@@ -339,8 +332,9 @@ class ViTBase16(nn.Module):
         
         super(ViTBase16, self).__init__()
         
-        self.model = timm.create_model("vit_base_patch16_224", pretrained=True)
-        if (pretrained):
+        #self.model = timm.create_model("vit_base_patch16_224", pretrained=True)
+        self.model = timm.create_model("vit_base_patch16_224")
+        if(pretrained):
             path = 'jx_vit_base_p16_224-80ecf9dd.pth'
             self.model.load_state_dict(torch.load(path))
 
@@ -426,13 +420,10 @@ class ViTBase16(nn.Module):
         return valid_loss / len(valid_loader.dataset), valid_accuracy / len(valid_loader.dataset)
 
 
-# In[11]:
+# In[10]:
 
 
 model = ViTBase16(n_classes=2, pretrained=True)
-
-# Start training processes
-device = torch.device("cuda")
 
 criterion = nn.CrossEntropyLoss() #nn.CrossEntropyLoss() #nn.BCELoss()
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -443,7 +434,7 @@ learning_rate = 0.0001
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
 
-# In[12]:
+# In[11]:
 
 
 def fit_tpu(model, name_model, epochs, device, criterion, optimizer, train_loader, valid_loader=None):
@@ -488,7 +479,7 @@ def fit_tpu(model, name_model, epochs, device, criterion, optimizer, train_loade
                 best_val_acc = valid_acc
 
 
-# In[13]:
+# In[12]:
 
 
 def plot_performance(cnn):
@@ -520,35 +511,35 @@ def plot_performance(cnn):
     
 
 
-# In[14]:
+# In[13]:
 
 
-name_model = 'other.pt'
+name_model = 'model.pt'
 #                          model, name_model, epochs, device, criterion, optimizer, train_loader, valid_loader=None
 mem_usage = memory_usage(( fit_tpu, (model, name_model, num_epochs, device, criterion, optimizer, train_loader, valid_loader)))
 
 
-# In[15]:
+# In[14]:
 
 
 print('Maximum memory usage: %s' % max(mem_usage))
 
 
-# In[16]:
+# In[15]:
 
 
-name = 'other.pt'#'model.pt'#'other.pt' 
+name = 'model.pt'#'model.pt'#'other.pt' 
 model = torch.load(name)
 print('Maximum validation accuracy: {:.2f}%'.format(100*model.validation_acc[-1].item()))
 
 
-# In[17]:
+# In[16]:
 
 
 plot_performance(model)
 
 
-# In[18]:
+# In[17]:
 
 
 def testing_analysis(prob_lim, test_loader):
@@ -567,12 +558,15 @@ def testing_analysis(prob_lim, test_loader):
     for i_batch, sample in enumerate(tqdm(test_loader)):
         sample_image, sample_label, sample_img, sample_data = sample['image'], sample['label'] , sample['img'], sample['data']
         
+        if device.type == "cuda":
+            sample_image, sample_label = sample_image.cuda(), sample_label.cuda()
+        
         output = model(sample_image)
         predicted = output.argmax(dim=1).item()
         my_df = pd.DataFrame.from_dict(sample_data)
     
         prob = nn.Softmax(dim=1)(output)
-        prob = prob[:,0].detach().numpy()[0]
+        prob = prob[:,0].detach().cpu().numpy()[0]
         predicted = 0 if prob >= prob_lim else 1
         
         prob_list.append(prob)
@@ -612,7 +606,7 @@ def testing_analysis(prob_lim, test_loader):
     return(images, data, rates, lists)
 
 
-# In[19]:
+# In[18]:
 
 
 prob_lim = 0.5
@@ -636,7 +630,7 @@ if(cluster):
     wrong_pos.to_csv('data_wrong_pos.csv')
 
 
-# In[20]:
+# In[19]:
 
 
 def make_plot_all(objects, title, data):
@@ -647,14 +641,14 @@ def make_plot_all(objects, title, data):
             for j in range(4):
                 if(i+j > len(objects)-1): break
                 plt.subplot(1,4,j+1)
-                new_title = 'Prob: {:.1f}'.format(data['Prob'][i+j])
+                new_title = 'Prob: {:.2f}'.format(data['Prob'][i+j])
                 plt.title(new_title)
                 rgb = make_lupton_rgb(objects[i+j][2], objects[i+j][1], objects[i+j][0], Q=11., stretch=40.)
                 plt.imshow(rgb, aspect='equal')
                 plt.xticks([], [])
                 plt.yticks([], []) 
             if(script):
-                plt.savefig(title+'_'+ str(i+j) + 'png', bbox_inches='tight')
+                plt.savefig(title+'_'+ str(i+j) + '.png', bbox_inches='tight')
                 plt.close()
             else: 
                 plt.show()
@@ -714,7 +708,7 @@ def ROC_curve(num_points):
         plt.show()
 
 
-# In[21]:
+# In[20]:
 
 
 prob_distribution(prob_list)
@@ -722,14 +716,14 @@ plot_confusion_matrix()
 ROC_curve(50)
 
 
-# In[22]:
+# In[21]:
 
 
 print('Right positives: ' + str(right_pos_img.shape))
 print('Wrong positives: ' + str(wrong_pos_img.shape))
 print('Right negatives: ' + str(right_neg_img.shape))
 print('Wrong negatives: ' + str(wrong_neg_img.shape))
-print('Accuracy: {:.2f}%'.format( 100*(len(right_pos_img)+len(right_neg_img)) /len(test_dataset)) + '%')
+print('Accuracy: {:.2f}%'.format( 100*(len(right_pos_img)+len(right_neg_img)) /len(test_dataset)))
 print('Area Under Curve: {:.3f}'.format(1-roc_auc_score(true_list, prob_list)))
 print('True positive rate: {:.2f}%'.format(TPR))
 print('False positive rate: {:.2f}%'.format(FPR))
@@ -739,7 +733,7 @@ print('Mean prob. right negatives: {:.3f}'.format(np.mean(right_neg['Prob'])))
 print('Mean prob. wrong negatives: {:.3f}'.format(np.mean(wrong_neg['Prob'])))
 
 
-# In[23]:
+# In[22]:
 
 
 def make_histo(name):
@@ -748,19 +742,13 @@ def make_histo(name):
     plt.subplot(1,2,1)
     plt.title('All distribution: ' + str(name))
     data_all = np.concatenate((right_pos[name], wrong_pos[name]))
-    weights = np.ones_like(data_all) / len(data_all)
-    #plt.hist(data_all, 30, weights = weights, edgecolor = 'black')
     plt.hist(data_all, density = True, bins = 'auto', edgecolor = 'black')
     
-    #nbins = 10 if name == 'Magni 1' else 30
     
     plt.subplot(1,2,2)
     plt.title(name)
     weights = np.ones_like(right_pos[name]) / len(right_pos[name])
-    #plt.hist(right_pos[name], weights = weights, bins = 'auto', color = 'coral', alpha = 0.6, edgecolor = 'black', label='right')
     plt.hist(right_pos[name], density = True, bins = 'auto', color = 'coral', alpha = 0.6, edgecolor = 'black', label='right')
-    weights = np.ones_like(wrong_pos[name]) / len(wrong_pos[name])
-    #plt.hist(wrong_pos[name], weights = weights, bins = 'auto', color = 'royalblue', alpha = 0.6, edgecolor = 'black', label='wrong')
     plt.hist(wrong_pos[name], density = True, bins = 'auto', color = 'royalblue', alpha = 0.6, edgecolor = 'black', label='wrong')
     plt.legend()
     
@@ -776,17 +764,12 @@ def histo_ratio(name, var1, var2):
     plt.subplot(1,2,1)
     plt.title('All distribution: ' + var1 + '/' + var2)
     data_all = np.concatenate((right_pos[var1]/right_pos[var2], wrong_pos[var1]/wrong_pos[var2]))
-    #weights = np.ones_like(data_all) / len(data_all)
-    plt.hist(data_all, bins = 'auto', edgecolor = 'black')
-
-    #nbins = 10 if name == 'Magni 1' else 30
+    plt.hist(data_all, density = True, bins = 'auto', edgecolor = 'black')
     
     plt.subplot(1,2,2)
     plt.title(var1 + '/' + var2)
-    weights = np.ones_like(right_pos[var1]) / len(right_pos[var1])
-    plt.hist(right_pos[var1]/right_pos[var2], bins = 'auto', color = 'coral', alpha = 0.6, edgecolor = 'black', label='right')
-    weights = np.ones_like(wrong_pos[var1]) / len(wrong_pos[var1])
-    plt.hist(wrong_pos[var1]/wrong_pos[var2], bins = 'auto', color = 'royalblue', alpha = 0.6, edgecolor = 'black', label='wrong')
+    plt.hist(right_pos[var1]/right_pos[var2], density = True, bins = 'auto', color = 'coral', alpha = 0.6, edgecolor = 'black', label='right')
+    plt.hist(wrong_pos[var1]/wrong_pos[var2], density = True, bins = 'auto', color = 'royalblue', alpha = 0.6, edgecolor = 'black', label='wrong')
     plt.legend()
     
     if(script):
@@ -802,7 +785,7 @@ def make_all_histos():
     histo_ratio('E_FluxR', 'EINSTEIN_RADIUS', 'FLUX_RADIUS_G')
 
 
-# In[24]:
+# In[23]:
 
 
 def make_prob_vs(name):
@@ -826,7 +809,7 @@ def make_all_prob_vs():
         make_prob_vs(name)
 
 
-# In[25]:
+# In[24]:
 
 
 def make_plots_correlation():
@@ -886,7 +869,7 @@ def make_plots_correlation():
     plt.xlabel(names[8])
     plt.ylabel(names[21] + '/' + names[2])
     plt.scatter(right_pos[names[8]], right_pos[names[21]]/right_pos[names[2]], color = 'blueviolet', alpha = 0.6, label ='Right')
-    plt.scatter(wrong_pos[names[8]], wrong_pos[names[21]]/right_pos[names[2]], color = 'cyan', alpha = 0.7, label = 'Wrong')
+    plt.scatter(wrong_pos[names[8]], wrong_pos[names[21]]/wrong_pos[names[2]], color = 'cyan', alpha = 0.7, label = 'Wrong')
     plt.legend()
 
     plt.subplot(5,2,9)
@@ -900,7 +883,7 @@ def make_plots_correlation():
     plt.xlabel(names[13])
     plt.ylabel(names[21] + '/' + names[2])
     plt.scatter(right_pos[names[13]], right_pos[names[21]]/right_pos[names[2]], color = 'blueviolet', alpha = 0.6, label ='Right')
-    plt.scatter(wrong_pos[names[13]], wrong_pos[names[21]]/right_pos[names[2]], color = 'cyan', alpha = 0.7, label = 'Wrong')
+    plt.scatter(wrong_pos[names[13]], wrong_pos[names[21]]/wrong_pos[names[2]], color = 'cyan', alpha = 0.7, label = 'Wrong')
     plt.legend()
     
     if(script):
@@ -910,25 +893,25 @@ def make_plots_correlation():
         plt.show()
 
 
-# In[26]:
+# In[25]:
 
 
 make_all_histos()
 
 
-# In[27]:
+# In[26]:
 
 
 make_all_prob_vs()
 
 
-# In[28]:
+# In[27]:
 
 
 make_plots_correlation()
 
 
-# In[29]:
+# In[28]:
 
 
 print('Wrong negatives')
