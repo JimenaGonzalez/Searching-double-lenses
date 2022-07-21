@@ -175,18 +175,18 @@ if(cluster):
 else:
     path = 'Data/' #local
     
-#10420, 4000, 164, 199, 1000, 223, 2000, 2000, 1500, 2500
-npos, nred, ngz2, nn10, nround, nmergers, nspirals, nellip, nothers, nrandom = 10, 10, 10, 10, 10, 10, 10, 10, 10, 10
-num_workers = 0
-num_epochs = 1
+#10420, 4000, 164, 199, 1000, 223, 2000, 2000, 1500, 2500, 500
+npos, nred, ngz2, nn10, nround, nmergers = 12000, 4000, 164, 199, 1000, 223
+nspirals, nellip, nothers, nrandom, nerrors = 2000, 2000, 1500, 2500, 500
+num_workers = 16
+num_epochs = 6
 
 
-hdu_list = fits.open(path + '45.fits')
+hdu_list = fits.open(path + '50.fits')
 idx = random.sample(range(len(hdu_list[1].data)), npos)
 images_pos = hdu_list[1].data[idx,:] 
 data_pos = pd.DataFrame(hdu_list[2].data[:][idx])
 data_pos = data_pos.drop('TILENAME', axis=1)
-#data_pos = data_pos.astype({'zl/z1': float, 'm': float, 'iso': float, 'E': float, 'Magni 1': float})
 labels_pos = np.zeros(npos, dtype = np.int64)
 hdu_list.close()
 
@@ -199,7 +199,6 @@ labels_neg1 = np.ones(nred, dtype = np.int64)
 num_columns = len(data_pos.columns)
 data_neg1 = np.full((nred, num_columns), 0)
 data_neg1 = pd.DataFrame(data_neg1, columns=data_pos.columns)
-#data_neg1 = data_neg1.astype({'zl/z1': float, 'm': float, 'iso': float, 'E': float, 'Magni 1': float})
 hdu_list.close()
 
 hdu_list = fits.open(path + 'bar_gz2.fits')
@@ -281,14 +280,23 @@ labels_neg9 = np.ones(nrandom, dtype = np.int64)
 data_neg9 = np.full((nrandom, num_columns), 0)
 data_neg9 = pd.DataFrame(data_neg9, columns=data_pos.columns)
 hdu_list.close()
-#data_neg2 = data_neg2.astype({'zl/z1': float, 'm': float, 'iso': float, 'E': float, 'Magni 1': float})
+
+hdu_list = fits.open(path + 'errors.fits')
+idx = random.sample(range(len(hdu_list[1].data)), nerrors)
+images_neg10 = hdu_list[1].data[idx,:] 
+images_neg10 = images_neg10[:,0:3,:,:]
+labels_neg10 = np.ones(nerrors, dtype = np.int64)
+#Data for negatives, all null
+data_neg10 = np.full((nerrors, num_columns), 0)
+data_neg10 = pd.DataFrame(data_neg10, columns=data_pos.columns)
+hdu_list.close()
 
 images_dataset = np.concatenate((images_pos, images_neg1, images_neg2, images_neg3, images_neg4, 
-                                 images_neg5, images_neg6, images_neg7, images_neg8, images_neg9)).astype(np.float32)
+                                 images_neg5, images_neg6, images_neg7, images_neg8, images_neg9, images_neg10)).astype(np.float32)
 data_dataset = pd.concat([data_pos, data_neg1, data_neg2, data_neg3, data_neg4, data_neg5, data_neg6,
-                         data_neg7, data_neg8, data_neg9], axis=0).reset_index(drop=True)
+                         data_neg7, data_neg8, data_neg9, data_neg10], axis=0).reset_index(drop=True)
 labels_dataset = np.concatenate((labels_pos, labels_neg1, labels_neg2, labels_neg3, labels_neg4, labels_neg5,
-                                labels_neg6, labels_neg7, labels_neg8, labels_neg9), dtype = np.int64)
+                                labels_neg6, labels_neg7, labels_neg8, labels_neg9, labels_neg10), dtype = np.int64)
 
 transform = transforms.Compose([
             transforms.Resize((224, 224)),
@@ -625,7 +633,7 @@ right_pos, wrong_pos, right_neg, wrong_neg = data[0], data[1], data[2], data[3]
 FPR, TPR = rates[0], rates[1]
 prob_list, true_list, pred_list = lists[0], lists[1], lists[2]
 conf_matrix = confusion_matrix(true_list, pred_list, labels = [0, 1])
-if(cluster):
+if(script):
     right_pos.to_csv('data_right_pos.csv')
     wrong_pos.to_csv('data_wrong_pos.csv')
 
