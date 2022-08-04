@@ -19,7 +19,7 @@ from torch.utils.data import Dataset, DataLoader
 import timm
 
 from sklearn.model_selection import train_test_split
-from transformers import ViTFeatureExtractor, ViTForImageClassification
+#from transformers import ViTFeatureExtractor, ViTForImageClassification
 
 from PIL import Image, ImageOps
 from astropy.io import fits
@@ -62,7 +62,7 @@ class ImageDataset(Dataset):
         new_image = new_image.transpose(1,2,0)
         new_image = Image.fromarray(np.uint8(255*new_image)).convert("RGB")
         label = self.labels[idx]
-        data_point = self.data.iloc[idx].to_dict()
+        data_point = self.data.iloc[idx].to_dict() 
         sample = {'image': self.transform(new_image), 'label': label, 'img': image, 'data': data_point}
         return sample
     
@@ -165,28 +165,26 @@ def search_tile(filename, prob_lim):
     search_images = int_arr / 65535 * img_scale[:,:,np.newaxis,np.newaxis] + img_min[:,:,np.newaxis,np.newaxis]
 
     search_dataset = ImageDataset(search_images, search_ids, search_labels, transform=transform)
-    search_loader = torch.utils.data.DataLoader(dataset=search_dataset, batch_size=1, num_workers=num_workers, shuffle=True)
+    search_loader = torch.utils.data.DataLoader(dataset=search_dataset, batch_size=40, num_workers=num_workers, shuffle=True)
     
     positives = np.zeros((1,4,45,45))
     data_df = pd.DataFrame()
     
     for i_batch, sample in enumerate(tqdm(search_loader)):
-        #if(i_batch==5): break
+        if(i_batch==3): break
         sample_image, sample_label, sample_img, sample_data = sample['image'], sample['label'] , sample['img'], sample['data']
         
         output = model(sample_image)
-        predicted = output.argmax(dim=1).item()
     
         prob = nn.Softmax(dim=1)(output)
-        prob = prob[:,0].detach().numpy()[0]
-    
-        predicted = 0 if prob >= prob_lim else 1
-    
-        if(predicted == 0):
-            new_df = pd.DataFrame.from_dict(sample_data)
-            new_df['Prob'] = prob
-            data_df = data_df.append(new_df, ignore_index=True)
-            positives = np.append(positives, [np.array(sample_img[0])], axis = 0)
+        prob = prob[:,0].detach()
+        
+        mask = prob.ge(prob_lim) #0.02 -> prob_lim
+        
+        new_df = pd.DataFrame(sample_data['COADD_OBJECT_ID'][mask], columns=['COADD_OBJECT_ID'])
+        new_df['Prob'] = prob[mask]
+        data_df = data_df.append(new_df, ignore_index=True)
+        positives = np.append(positives, np.array(sample_img[mask]), axis = 0)
     
     positives = np.delete(positives, 0, axis = 0)
     
@@ -216,16 +214,13 @@ transform = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))])
 
-model = timm.create_model("vit_base_patch16_224", pretrained=True)
-path_model = 'jx_vit_base_p16_224-80ecf9dd.pth'
-model.load_state_dict(torch.load(path_model))
-
 model = ViTBase16(n_classes=2, pretrained=True)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(device)
 model.to(device)
 
-name = 'exp_39/model.pt'#'model.pt'#'other.pt' 
-model = torch.load(name)
+name = 'Experiments/exp_50/model.pt'#'model.pt'#'other.pt' 
+model = torch.load(name, map_location=torch.device('cpu'))
 
 
 # In[7]:
